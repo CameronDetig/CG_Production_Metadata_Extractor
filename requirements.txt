@@ -1,0 +1,10 @@
+# Image processing
+Pillow>=10.0.0
+
+# Video processing
+ffmpeg-python>=0.2.0
+
+# File type detection
+python-magic>=0.4.27
+
+# Database (SQLite is built-in to Python)

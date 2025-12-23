@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  metadata-extractor:
+    build: .
+    container_name: cg_metadata_extractor
+    volumes:
+      # Mount your data directory (read-only)
+      - ./data:/data:ro
+      # Mount database directory
+      - ./db:/app/db
+      # Mount output directory for reports
+      - ./output:/app/output
+    environment:
+      - DATA_PATH=/data
+      - DB_PATH=/app/db/metadata.db
+      - LOG_LEVEL=INFO
+    restart: unless-stopped

@@ -1,0 +1,3 @@
+"""
+Metadata extractors package
+"""

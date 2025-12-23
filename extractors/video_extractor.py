@@ -1,0 +1,71 @@
+"""
+Video metadata extractor
+Supports: MP4, MOV, AVI, MKV, etc.
+"""
+import os
+import subprocess
+import json
+from datetime import datetime
+import magic
+
+
+def extract_video_metadata(file_path):
+    """Extract metadata from video files using ffprobe"""
+    metadata = {
+        'file_path': file_path,
+        'file_name': os.path.basename(file_path),
+        'file_size': os.path.getsize(file_path),
+        'file_type': 'video',
+        'modified_date': datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat(),
+        'created_date': datetime.fromtimestamp(os.path.getctime(file_path)).isoformat(),
+    }
+    
+    try:
+        # Get MIME type
+        mime = magic.Magic(mime=True)
+        metadata['mime_type'] = mime.from_file(file_path)
+        
+        # Use ffprobe to extract video metadata
+        cmd = [
+            'ffprobe',
+            '-v', 'quiet',
+            '-print_format', 'json',
+            '-show_format',
+            '-show_streams',
+            file_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            ffprobe_data = json.loads(result.stdout)
+            
+            # Extract format information
+            if 'format' in ffprobe_data:
+                fmt = ffprobe_data['format']
+                metadata['duration'] = float(fmt.get('duration', 0))
+                metadata['bit_rate'] = int(fmt.get('bit_rate', 0))
+                metadata['format_name'] = fmt.get('format_name', '')
+                
+            # Extract video stream information
+            video_streams = [s for s in ffprobe_data.get('streams', []) if s['codec_type'] == 'video']
+            if video_streams:
+                video = video_streams[0]
+                metadata['width'] = video.get('width')
+                metadata['height'] = video.get('height')
+                metadata['codec'] = video.get('codec_name')
+                metadata['fps'] = eval(video.get('r_frame_rate', '0/1'))
+                metadata['pixel_format'] = video.get('pix_fmt')
+            
+            # Extract audio stream information
+            audio_streams = [s for s in ffprobe_data.get('streams', []) if s['codec_type'] == 'audio']
+            if audio_streams:
+                audio = audio_streams[0]
+                metadata['audio_codec'] = audio.get('codec_name')
+                metadata['sample_rate'] = audio.get('sample_rate')
+                metadata['channels'] = audio.get('channels')
+                
+    except Exception as e:
+        metadata['error'] = str(e)
+    
+    return metadata
