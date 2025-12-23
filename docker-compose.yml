@@ -5,14 +5,30 @@ services:
     build: .
     container_name: cg_metadata_extractor
     volumes:
-      # Mount your data directory (read-only)
+      # Mount your data directory (read-only) - for local development only
       - ./data:/data:ro
-      # Mount database directory
+      # Mount database directory - for SQLite local development
       - ./db:/app/db
       # Mount output directory for reports
       - ./output:/app/output
     environment:
+      # Storage configuration
+      - STORAGE_TYPE=local # Change to 's3' for AWS deployment
+
+      # Local storage path (used when STORAGE_TYPE=local)
       - DATA_PATH=/data
-      - DB_PATH=/app/db/metadata.db
+
+      # S3 configuration (used when STORAGE_TYPE=s3)
+      # - S3_BUCKET_NAME=your-bucket-name
+      # - S3_PREFIX=production-files/
+      # - AWS_REGION=us-east-1
+      # Note: AWS credentials should be provided via IAM roles in AWS Batch
+
+      # Database configuration
+      - DATABASE_URL=sqlite:///./db/metadata.db # Local SQLite
+      # For PostgreSQL (AWS RDS), use:
+      # - DATABASE_URL=postgresql://username:password@host:5432/database
+
+      # Logging
       - LOG_LEVEL=INFO
     restart: unless-stopped

@@ -1,244 +1,335 @@
 """
-Database models and schema for metadata storage
+Database models and schema for metadata storage using SQLAlchemy ORM
+Supports both SQLite (local development) and PostgreSQL (AWS RDS)
 """
-import sqlite3
-import json
+import os
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey, Index, JSON
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship, Session
+from sqlalchemy.pool import NullPool, QueuePool
+
+Base = declarative_base()
+
+
+class File(Base):
+    """Main file metadata table"""
+    __tablename__ = 'files'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_path = Column(String(1024), unique=True, nullable=False, index=True)
+    file_name = Column(String(255), nullable=False, index=True)
+    file_type = Column(String(50), nullable=False, index=True)
+    file_size = Column(Integer)
+    mime_type = Column(String(100))
+    created_date = Column(DateTime)
+    modified_date = Column(DateTime)
+    scan_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    metadata_json = Column(JSON)
+    error = Column(Text)
+    
+    # Relationships
+    image = relationship("Image", back_populates="file", uselist=False, cascade="all, delete-orphan")
+    video = relationship("Video", back_populates="file", uselist=False, cascade="all, delete-orphan")
+    blend_file = relationship("BlendFile", back_populates="file", uselist=False, cascade="all, delete-orphan")
+
+
+class Image(Base):
+    """Image-specific metadata"""
+    __tablename__ = 'images'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    width = Column(Integer)
+    height = Column(Integer)
+    format = Column(String(50))
+    mode = Column(String(50))
+    
+    file = relationship("File", back_populates="image")
+
+
+class Video(Base):
+    """Video-specific metadata"""
+    __tablename__ = 'videos'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    width = Column(Integer)
+    height = Column(Integer)
+    duration = Column(Float)
+    fps = Column(Float)
+    codec = Column(String(100))
+    bit_rate = Column(Integer)
+    
+    file = relationship("File", back_populates="video")
+
+
+class BlendFile(Base):
+    """Blender file-specific metadata"""
+    __tablename__ = 'blend_files'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    scene_name = Column(String(255))
+    frame_start = Column(Integer)
+    frame_end = Column(Integer)
+    fps = Column(Integer)
+    render_engine = Column(String(100))
+    resolution_x = Column(Integer)
+    resolution_y = Column(Integer)
+    total_objects = Column(Integer)
+    meshes = Column(Integer)
+    cameras = Column(Integer)
+    lights = Column(Integer)
+    
+    file = relationship("File", back_populates="blend_file")
 
 
 class MetadataDatabase:
-    def __init__(self, db_path: str):
-        self.db_path = db_path
+    """Database interface for metadata storage"""
+    
+    def __init__(self, database_url: Optional[str] = None):
+        """
+        Initialize database connection
+        
+        Args:
+            database_url: SQLAlchemy database URL
+                         Examples:
+                         - sqlite:///./db/metadata.db (local)
+                         - postgresql://user:pass@host:5432/dbname (RDS)
+        """
+        if database_url is None:
+            # Default to SQLite for backward compatibility
+            database_url = os.getenv('DATABASE_URL', 'sqlite:///./db/metadata.db')
+        
+        self.database_url = database_url
+        
+        # Configure engine based on database type
+        if database_url.startswith('postgresql'):
+            # PostgreSQL with connection pooling for RDS
+            self.engine = create_engine(
+                database_url,
+                poolclass=QueuePool,
+                pool_size=5,
+                max_overflow=10,
+                pool_pre_ping=True,  # Verify connections before using
+                echo=False
+            )
+        else:
+            # SQLite for local development
+            self.engine = create_engine(
+                database_url,
+                poolclass=NullPool,  # SQLite doesn't need pooling
+                echo=False
+            )
+        
+        # Create session factory
+        self.SessionLocal = sessionmaker(bind=self.engine)
+        
+        # Initialize schema
         self.init_database()
     
     def init_database(self):
-        """Initialize the database schema"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Main metadata table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS files (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_path TEXT UNIQUE NOT NULL,
-                file_name TEXT NOT NULL,
-                file_type TEXT NOT NULL,
-                file_size INTEGER,
-                mime_type TEXT,
-                created_date TEXT,
-                modified_date TEXT,
-                scan_date TEXT NOT NULL,
-                metadata_json TEXT,
-                error TEXT
-            )
-        """)
-        
-        # Index for faster searches
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_file_type 
-            ON files(file_type)
-        """)
-        
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_file_name 
-            ON files(file_name)
-        """)
-        
-        # Blender-specific table for structured queries
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS blend_files (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_id INTEGER NOT NULL,
-                scene_name TEXT,
-                frame_start INTEGER,
-                frame_end INTEGER,
-                fps INTEGER,
-                render_engine TEXT,
-                resolution_x INTEGER,
-                resolution_y INTEGER,
-                total_objects INTEGER,
-                meshes INTEGER,
-                cameras INTEGER,
-                lights INTEGER,
-                FOREIGN KEY (file_id) REFERENCES files(id)
-            )
-        """)
-        
-        # Image-specific table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS images (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_id INTEGER NOT NULL,
-                width INTEGER,
-                height INTEGER,
-                format TEXT,
-                mode TEXT,
-                FOREIGN KEY (file_id) REFERENCES files(id)
-            )
-        """)
-        
-        # Video-specific table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS videos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_id INTEGER NOT NULL,
-                width INTEGER,
-                height INTEGER,
-                duration REAL,
-                fps REAL,
-                codec TEXT,
-                bit_rate INTEGER,
-                FOREIGN KEY (file_id) REFERENCES files(id)
-            )
-        """)
-        
-        conn.commit()
-        conn.close()
+        """Create all tables if they don't exist"""
+        Base.metadata.create_all(self.engine)
+    
+    def get_session(self) -> Session:
+        """Get a new database session"""
+        return self.SessionLocal()
     
     def insert_metadata(self, metadata: Dict[str, Any]) -> int:
-        """Insert metadata into the database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        """
+        Insert metadata into the database
+        
+        Args:
+            metadata: Dictionary containing file metadata
+            
+        Returns:
+            File ID of inserted record
+        """
+        session = self.get_session()
         
         try:
-            # Insert into main files table
-            cursor.execute("""
-                INSERT OR REPLACE INTO files 
-                (file_path, file_name, file_type, file_size, mime_type, 
-                 created_date, modified_date, scan_date, metadata_json, error)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                metadata.get('file_path'),
-                metadata.get('file_name'),
-                metadata.get('file_type'),
-                metadata.get('file_size'),
-                metadata.get('mime_type'),
-                metadata.get('created_date'),
-                metadata.get('modified_date'),
-                datetime.now().isoformat(),
-                json.dumps(metadata),
-                metadata.get('error')
-            ))
+            # Check if file already exists
+            existing_file = session.query(File).filter_by(
+                file_path=metadata.get('file_path')
+            ).first()
             
-            file_id = cursor.lastrowid
+            if existing_file:
+                # Update existing record
+                file_record = existing_file
+                file_record.file_name = metadata.get('file_name')
+                file_record.file_type = metadata.get('file_type')
+                file_record.file_size = metadata.get('file_size')
+                file_record.mime_type = metadata.get('mime_type')
+                file_record.created_date = metadata.get('created_date')
+                file_record.modified_date = metadata.get('modified_date')
+                file_record.scan_date = datetime.utcnow()
+                file_record.metadata_json = metadata
+                file_record.error = metadata.get('error')
+            else:
+                # Create new file record
+                file_record = File(
+                    file_path=metadata.get('file_path'),
+                    file_name=metadata.get('file_name'),
+                    file_type=metadata.get('file_type'),
+                    file_size=metadata.get('file_size'),
+                    mime_type=metadata.get('mime_type'),
+                    created_date=metadata.get('created_date'),
+                    modified_date=metadata.get('modified_date'),
+                    scan_date=datetime.utcnow(),
+                    metadata_json=metadata,
+                    error=metadata.get('error')
+                )
+                session.add(file_record)
+                session.flush()  # Get the ID
             
-            # Insert into type-specific tables
+            file_id = file_record.id
+            
+            # Insert type-specific metadata
             if metadata.get('file_type') == 'blend' and 'blend_data' in metadata:
                 blend_data = metadata['blend_data']
                 scene_info = blend_data.get('scene_info', {})
                 render_settings = blend_data.get('render_settings', {})
                 stats = blend_data.get('statistics', {})
                 
-                cursor.execute("""
-                    INSERT INTO blend_files 
-                    (file_id, scene_name, frame_start, frame_end, fps, 
-                     render_engine, resolution_x, resolution_y, 
-                     total_objects, meshes, cameras, lights)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    file_id,
-                    scene_info.get('name'),
-                    scene_info.get('frame_start'),
-                    scene_info.get('frame_end'),
-                    scene_info.get('fps'),
-                    render_settings.get('engine'),
-                    render_settings.get('resolution_x'),
-                    render_settings.get('resolution_y'),
-                    stats.get('total_objects'),
-                    stats.get('meshes'),
-                    stats.get('cameras'),
-                    stats.get('lights')
-                ))
+                # Delete existing blend record if updating
+                if existing_file and file_record.blend_file:
+                    session.delete(file_record.blend_file)
+                
+                blend_record = BlendFile(
+                    file_id=file_id,
+                    scene_name=scene_info.get('name'),
+                    frame_start=scene_info.get('frame_start'),
+                    frame_end=scene_info.get('frame_end'),
+                    fps=scene_info.get('fps'),
+                    render_engine=render_settings.get('engine'),
+                    resolution_x=render_settings.get('resolution_x'),
+                    resolution_y=render_settings.get('resolution_y'),
+                    total_objects=stats.get('total_objects'),
+                    meshes=stats.get('meshes'),
+                    cameras=stats.get('cameras'),
+                    lights=stats.get('lights')
+                )
+                session.add(blend_record)
             
             elif metadata.get('file_type') == 'image':
-                cursor.execute("""
-                    INSERT INTO images 
-                    (file_id, width, height, format, mode)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (
-                    file_id,
-                    metadata.get('width'),
-                    metadata.get('height'),
-                    metadata.get('format'),
-                    metadata.get('mode')
-                ))
+                # Delete existing image record if updating
+                if existing_file and file_record.image:
+                    session.delete(file_record.image)
+                
+                image_record = Image(
+                    file_id=file_id,
+                    width=metadata.get('width'),
+                    height=metadata.get('height'),
+                    format=metadata.get('format'),
+                    mode=metadata.get('mode')
+                )
+                session.add(image_record)
             
             elif metadata.get('file_type') == 'video':
-                cursor.execute("""
-                    INSERT INTO videos 
-                    (file_id, width, height, duration, fps, codec, bit_rate)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    file_id,
-                    metadata.get('width'),
-                    metadata.get('height'),
-                    metadata.get('duration'),
-                    metadata.get('fps'),
-                    metadata.get('codec'),
-                    metadata.get('bit_rate')
-                ))
+                # Delete existing video record if updating
+                if existing_file and file_record.video:
+                    session.delete(file_record.video)
+                
+                video_record = Video(
+                    file_id=file_id,
+                    width=metadata.get('width'),
+                    height=metadata.get('height'),
+                    duration=metadata.get('duration'),
+                    fps=metadata.get('fps'),
+                    codec=metadata.get('codec'),
+                    bit_rate=metadata.get('bit_rate')
+                )
+                session.add(video_record)
             
-            conn.commit()
+            session.commit()
             return file_id
             
         except Exception as e:
-            conn.rollback()
+            session.rollback()
             raise e
         finally:
-            conn.close()
+            session.close()
     
-    def get_file_by_path(self, file_path: str) -> Dict[str, Any]:
+    def get_file_by_path(self, file_path: str) -> Optional[Dict[str, Any]]:
         """Retrieve file metadata by path"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        session = self.get_session()
         
-        cursor.execute("SELECT * FROM files WHERE file_path = ?", (file_path,))
-        row = cursor.fetchone()
-        
-        conn.close()
-        
-        if row:
-            columns = [desc[0] for desc in cursor.description]
-            return dict(zip(columns, row))
-        return None
+        try:
+            file_record = session.query(File).filter_by(file_path=file_path).first()
+            
+            if file_record:
+                return {
+                    'id': file_record.id,
+                    'file_path': file_record.file_path,
+                    'file_name': file_record.file_name,
+                    'file_type': file_record.file_type,
+                    'file_size': file_record.file_size,
+                    'mime_type': file_record.mime_type,
+                    'created_date': file_record.created_date,
+                    'modified_date': file_record.modified_date,
+                    'scan_date': file_record.scan_date,
+                    'metadata_json': file_record.metadata_json,
+                    'error': file_record.error
+                }
+            return None
+        finally:
+            session.close()
     
-    def get_all_files(self, file_type: str = None) -> List[Dict[str, Any]]:
+    def get_all_files(self, file_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieve all files, optionally filtered by type"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        session = self.get_session()
         
-        if file_type:
-            cursor.execute("SELECT * FROM files WHERE file_type = ?", (file_type,))
-        else:
-            cursor.execute("SELECT * FROM files")
-        
-        rows = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        
-        conn.close()
-        
-        return [dict(zip(columns, row)) for row in rows]
+        try:
+            query = session.query(File)
+            
+            if file_type:
+                query = query.filter_by(file_type=file_type)
+            
+            files = query.all()
+            
+            return [{
+                'id': f.id,
+                'file_path': f.file_path,
+                'file_name': f.file_name,
+                'file_type': f.file_type,
+                'file_size': f.file_size,
+                'mime_type': f.mime_type,
+                'created_date': f.created_date,
+                'modified_date': f.modified_date,
+                'scan_date': f.scan_date,
+                'metadata_json': f.metadata_json,
+                'error': f.error
+            } for f in files]
+        finally:
+            session.close()
     
     def get_statistics(self) -> Dict[str, Any]:
         """Get database statistics"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        session = self.get_session()
         
-        stats = {}
-        
-        # Total files
-        cursor.execute("SELECT COUNT(*) FROM files")
-        stats['total_files'] = cursor.fetchone()[0]
-        
-        # Files by type
-        cursor.execute("SELECT file_type, COUNT(*) FROM files GROUP BY file_type")
-        stats['by_type'] = {row[0]: row[1] for row in cursor.fetchall()}
-        
-        # Total size
-        cursor.execute("SELECT SUM(file_size) FROM files")
-        stats['total_size_bytes'] = cursor.fetchone()[0] or 0
-        
-        conn.close()
-        
-        return stats
+        try:
+            from sqlalchemy import func
+            
+            stats = {}
+            
+            # Total files
+            stats['total_files'] = session.query(func.count(File.id)).scalar()
+            
+            # Files by type
+            type_counts = session.query(
+                File.file_type,
+                func.count(File.id)
+            ).group_by(File.file_type).all()
+            
+            stats['by_type'] = {file_type: count for file_type, count in type_counts}
+            
+            # Total size
+            total_size = session.query(func.sum(File.file_size)).scalar()
+            stats['total_size_bytes'] = total_size or 0
+            
+            return stats
+        finally:
+            session.close()

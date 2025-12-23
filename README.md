@@ -9,22 +9,29 @@ This containerized application extracts metadata from production files including
 - **Videos** (MP4, MOV, AVI, MKV)
 - **.blend files** (Blender projects)
 
-All metadata is stored in a SQLite database for querying and analysis.
+Metadata is stored in a database (SQLite for local dev, PostgreSQL for AWS) for querying and analysis.
+
+**Deployment Options:**
+- 🏠 **Local Development**: Process files on your machine with SQLite
+- ☁️ **AWS Batch**: Process files from S3 with RDS PostgreSQL (production-ready)
 
 ## Architecture
 
 - **Docker Container**: Ubuntu-based with Blender and Python
+- **Storage Adapters**: Support for local filesystem and AWS S3
 - **Metadata Extractors**: Specialized modules for each file type
-- **SQLite Database**: Stores structured metadata
-- **Scanner**: Recursively processes all files in data directory
+- **Database**: SQLite (local) or PostgreSQL (AWS RDS)
+- **Scanner**: Recursively processes all files from storage
 
 ## Quick Start
 
-### Prerequisites
+### Local Development
+
+#### Prerequisites
 - Docker and Docker Compose installed
 - Your production data in the `./data` directory
 
-### Build and Run
+#### Build and Run
 
 ```bash
 # Build the container
@@ -44,6 +51,10 @@ The scanner will:
 1. Walk through all files in the `./data` directory
 2. Extract metadata based on file type
 3. Store results in `./db/metadata.db`
+
+### AWS Batch Deployment
+
+For production deployment with S3 and RDS, see the [AWS Batch Deployment Guide](docs/aws-batch-deployment.md).
 
 ## Project Structure
 
@@ -111,9 +122,21 @@ SELECT AVG(duration) FROM videos;
 
 ## Configuration
 
-Environment variables in `docker-compose.yml`:
-- `DATA_PATH`: Path to scan (default: `/data`)
-- `DB_PATH`: Database location (default: `/app/db/metadata.db`)
+Environment variables (see `.env.example` for full details):
+
+### Storage Configuration
+- `STORAGE_TYPE`: `local` or `s3`
+- `DATA_PATH`: Local filesystem path (when STORAGE_TYPE=local)
+- `S3_BUCKET_NAME`: S3 bucket name (when STORAGE_TYPE=s3)
+- `S3_PREFIX`: S3 key prefix/folder (when STORAGE_TYPE=s3)
+- `AWS_REGION`: AWS region for S3
+
+### Database Configuration
+- `DATABASE_URL`: SQLAlchemy database URL
+  - SQLite: `sqlite:///./db/metadata.db`
+  - PostgreSQL: `postgresql://user:pass@host:5432/dbname`
+
+### Application
 - `LOG_LEVEL`: Logging verbosity (INFO, DEBUG, WARNING, ERROR)
 
 ## Extending the Scanner
@@ -157,6 +180,16 @@ docker-compose logs metadata-extractor
 - .blend files are slowest (Blender must load each file)
 - Subsequent scans only process new/modified files
 - Database is indexed for fast queries
+
+## AWS Deployment
+
+See [AWS Batch Deployment Guide](docs/aws-batch-deployment.md) for:
+- Setting up S3 bucket and RDS PostgreSQL
+- Building and pushing Docker image to ECR
+- Configuring IAM roles and permissions
+- Creating AWS Batch job definitions
+- Triggering jobs (manual, scheduled, event-driven)
+- Monitoring and troubleshooting
 
 ## Next Steps
 

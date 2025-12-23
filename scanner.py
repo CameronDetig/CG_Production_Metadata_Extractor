@@ -1,6 +1,7 @@
 """
 Main scanner application
 Walks through directory structure and extracts metadata from all files
+Supports both local filesystem and AWS S3 storage
 """
 import os
 import logging
@@ -9,6 +10,7 @@ from typing import List, Dict, Any
 import sys
 
 from database import MetadataDatabase
+from storage_adapter import create_storage_adapter
 from extractors.image_extractor import extract_image_metadata
 from extractors.video_extractor import extract_video_metadata
 from extractors.blend_extractor import extract_blend_metadata
@@ -29,9 +31,16 @@ BLEND_EXTENSIONS = {'.blend'}
 
 
 class FileScanner:
-    def __init__(self, data_path: str, db_path: str):
-        self.data_path = Path(data_path)
-        self.db = MetadataDatabase(db_path)
+    def __init__(self, storage_adapter, database):
+        """
+        Initialize file scanner
+        
+        Args:
+            storage_adapter: StorageAdapter instance (local or S3)
+            database: MetadataDatabase instance
+        """
+        self.storage = storage_adapter
+        self.db = database
         self.stats = {
             'scanned': 0,
             'images': 0,
@@ -42,18 +51,20 @@ class FileScanner:
         }
     
     def scan(self):
-        """Scan all files in the data directory"""
-        logger.info(f"Starting scan of {self.data_path}")
+        """Scan all files in the storage"""
+        logger.info(f"Starting scan using {self.storage.__class__.__name__}")
         
-        if not self.data_path.exists():
-            logger.error(f"Data path does not exist: {self.data_path}")
+        # Get list of all files
+        try:
+            files = self.storage.list_files()
+            logger.info(f"Found {len(files)} files to process")
+        except Exception as e:
+            logger.error(f"Failed to list files: {str(e)}")
             return
         
-        # Walk through all files
-        for root, dirs, files in os.walk(self.data_path):
-            for filename in files:
-                file_path = os.path.join(root, filename)
-                self.process_file(file_path)
+        # Process each file
+        for file_path in files:
+            self.process_file(file_path)
         
         self.print_summary()
     
@@ -68,15 +79,15 @@ class FileScanner:
             metadata = None
             
             if file_ext in IMAGE_EXTENSIONS:
-                metadata = extract_image_metadata(file_path)
+                metadata = self._process_with_storage(file_path, extract_image_metadata, 'image')
                 self.stats['images'] += 1
                 
             elif file_ext in VIDEO_EXTENSIONS:
-                metadata = extract_video_metadata(file_path)
+                metadata = self._process_with_storage(file_path, extract_video_metadata, 'video')
                 self.stats['videos'] += 1
                 
             elif file_ext in BLEND_EXTENSIONS:
-                metadata = extract_blend_metadata(file_path)
+                metadata = self._process_with_storage(file_path, extract_blend_metadata, 'blend')
                 self.stats['blend_files'] += 1
                 
             else:
@@ -96,6 +107,32 @@ class FileScanner:
         except Exception as e:
             logger.error(f"Failed to process {file_path}: {str(e)}")
             self.stats['errors'] += 1
+    
+    def _process_with_storage(self, file_path: str, extractor_func, file_type: str) -> Dict[str, Any]:
+        """
+        Process a file using the storage adapter
+        Downloads from S3 if needed, then runs extractor
+        
+        Args:
+            file_path: Path to file (local or S3 URI)
+            extractor_func: Function to extract metadata
+            file_type: Type of file (image, video, blend)
+            
+        Returns:
+            Metadata dictionary
+        """
+        # Use context manager to get local file path
+        # For S3, this downloads to temp; for local, returns path directly
+        with self.storage.get_file(file_path) as local_path:
+            metadata = extractor_func(local_path)
+            
+            # Ensure file_path in metadata is the original path (not temp path)
+            if metadata:
+                metadata['file_path'] = file_path
+                metadata['file_type'] = file_type
+            
+            return metadata
+        # Temp file automatically cleaned up here for S3
     
     def print_summary(self):
         """Print scan summary"""
@@ -120,19 +157,37 @@ class FileScanner:
 
 def main():
     """Main entry point"""
-    # Get configuration from environment or use defaults
-    data_path = os.getenv('DATA_PATH', '/data')
-    db_path = os.getenv('DB_PATH', '/app/db/metadata.db')
+    # Get configuration from environment
+    storage_type = os.getenv('STORAGE_TYPE', 'local').lower()
+    database_url = os.getenv('DATABASE_URL', 'sqlite:///./db/metadata.db')
     log_level = os.getenv('LOG_LEVEL', 'INFO')
     
     # Set log level
     logging.getLogger().setLevel(getattr(logging, log_level))
     
-    # Create scanner and run
-    scanner = FileScanner(data_path, db_path)
-    scanner.scan()
+    logger.info("="*50)
+    logger.info("CG Production Data Assistant - Metadata Scanner")
+    logger.info("="*50)
+    logger.info(f"Storage Type: {storage_type}")
+    logger.info(f"Database: {database_url}")
+    logger.info("="*50 + "\n")
     
-    logger.info("Scan complete!")
+    try:
+        # Create storage adapter
+        storage = create_storage_adapter(storage_type)
+        
+        # Create database connection
+        db = MetadataDatabase(database_url)
+        
+        # Create scanner and run
+        scanner = FileScanner(storage, db)
+        scanner.scan()
+        
+        logger.info("Scan complete!")
+        
+    except Exception as e:
+        logger.error(f"Fatal error: {str(e)}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
