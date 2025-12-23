@@ -166,6 +166,3 @@ docker-compose logs metadata-extractor
 - Implement incremental scanning
 - Export reports to CSV/JSON
 
-## License
-
-MIT
