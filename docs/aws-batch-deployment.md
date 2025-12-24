@@ -23,12 +23,33 @@ This guide covers deploying the CG Production Data Assistant to AWS Batch with S
 └─────────────────┘
 ```
 
-## Prerequisites
+You will need an AWS Account with appropriate permissions
 
-- AWS Account with appropriate permissions
-- Docker image pushed to ECR (Elastic Container Registry)
-- S3 bucket with your production files
-- RDS PostgreSQL database instance
+On your local machine, install AWS CLI (Command Line Interface) for managing AWS services
+
+Download and run the MSI installer: https://aws.amazon.com/cli/
+
+verify installation:
+```
+aws --version
+```
+
+Configure AWS Credentials:
+```
+aws configure
+# Enter your:
+# - AWS Access Key ID
+# - AWS Secret Access Key
+# - Default region (e.g., us-east-1)
+# - Default output format (json)
+```
+
+Get your AWS Account ID:
+```
+aws sts get-caller-identity --query Account --output text
+```
+
+Make sure you have docker installed and running: https://www.docker.com/
 
 ## Step 1: Set Up RDS PostgreSQL Database
 
@@ -41,10 +62,18 @@ This guide covers deploying the CG Production Data Assistant to AWS Batch with S
 5. Configure:
    - DB instance identifier: `cg-metadata-db`
    - Master username: `postgres`
-   - Master password: (save securely)
+   - Master password: (create a password and save for use later)
    - VPC: Default or custom
    - Public access: No (for security)
+   - RDS Data API: enable
 6. Create database
+
+
+This should look something like:
+- ch-metadata-db &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  # Regional cluster
+  - cg-metadata-db-instance-1 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; #  Writer instance
+  - g-metadata-db-instance-1-us-east-1b &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; # Reader instance
+
 
 ### Initialize Database Schema
 
@@ -106,6 +135,8 @@ docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/cg-metadata-extractor:l
 
 Create a policy named `CGMetadataExtractorPolicy` with these permissions:
 
+This will allows the batch process access to the s3 container with the files.
+
 ```json
 {
   "Version": "2012-10-17",
@@ -145,7 +176,7 @@ Create a policy named `CGMetadataExtractorPolicy` with these permissions:
 
 ### Add RDS Access to Security Group
 
-1. Go to RDS Console → Your database → Security groups
+1. Go to VPC console → Security groups → select the security group associated with your cg database
 2. Edit inbound rules
 3. Add rule:
    - Type: PostgreSQL
@@ -155,7 +186,7 @@ Create a policy named `CGMetadataExtractorPolicy` with these permissions:
 
 ### Create Compute Environment
 
-1. Go to AWS Batch Console → Compute environments → Create
+1. Go to Batch Console → Environments → create environment
 2. Configuration:
    - Name: `cg-metadata-compute`
    - Service role: Create new or use existing
@@ -183,13 +214,35 @@ Create a policy named `CGMetadataExtractorPolicy` with these permissions:
    - Execution role: `CGMetadataExtractorRole`
    - Image: `<account-id>.dkr.ecr.us-east-1.amazonaws.com/cg-metadata-extractor:latest`
    - vCPUs: 2
-   - Memory: 4096 MB
-   - Environment variables:
+   - Memory: 4 GB
+   - Add Environment variables:
      ```
      STORAGE_TYPE=s3
-     S3_BUCKET_NAME=my-cg-production-files
+     S3_BUCKET_NAME=cg-production-files-bucket-name
+
+                      # The S3_PREFIX is the folder path (prefix) within your 
+                      # S3 bucket where your production files are stored. 
+                      # It tells the scanner which subdirectory to scan.
+                      # s3://my-cg-production-files/
+                        ├── production-files/          ← This is the prefix
+                        │   ├── data/
+                        │   │   └── spring/
+                        │   │       ├── assets/
+                        │   │       ├── concept_art/
+                        │   │       └── shot/
+                        │   └── other-project-files/
+                        ├── backups/
+                        └── temp/
+
+                      # if you want to scan everything, use:
+                      S3_PREFIX=
+
+                      # if you want to scan a specific folder, use:
+                      S3_PREFIX=production-files/
      S3_PREFIX=production-files/
      AWS_REGION=us-east-1
+
+                      # use the password you made earlier for the database
      DATABASE_URL=postgresql://postgres:password@rds-endpoint:5432/postgres
      LOG_LEVEL=INFO
      ```
@@ -199,7 +252,9 @@ Create a policy named `CGMetadataExtractorPolicy` with these permissions:
 
 ## Step 6: Run the Job
 
-### Submit Job Manually
+### Submit Job (2 options)
+
+## Option 1: Through the CLI
 
 ```bash
 aws batch submit-job \
@@ -208,15 +263,40 @@ aws batch submit-job \
   --job-definition cg-metadata-job
 ```
 
+## Option 2: Through the AWS Console UI
+1. Go to the "Jobs" section in the AWS Batch console
+2. Submit New Job: Click "Submit new job"
+3. Configure the Job:
+    - Enter a unique Job name (something like "cg-metadata-job-run-1)
+    - Select your Job definition: (should be something like "cg-metadata-job")
+    - Choose a Job queue: cg-metadata-queue
+    - Optional Overrides: You can override container settings
+4. Click "Submit job"
+
+
 ### Monitor Job
 
-1. AWS Batch Console → Jobs
+Once submitted, your job will progress through these states:
+
+SUBMITTED → PENDING → RUNNABLE → STARTING → RUNNING → SUCCEEDED/FAILED
+
+1. AWS Batch Console → Jobs  (you may have to refresh results)
 2. Click on job to see status and logs
 3. View CloudWatch Logs for detailed output
 
 ### Check Results
 
-Connect to RDS and query the database:
+Connect to RDS: 
+
+Go to AWS Aurora and RDS - Query Editor
+
+![connect to rds](images/connect_to_db.png)
+
+
+AWS doesn't have a dedicated database viewer, so if you want a GUI, you will need to download a tool. I am using pgAdmin: https://www.pgadmin.org/
+
+
+Query the database:
 
 ```sql
 -- Total files processed
