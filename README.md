@@ -1,6 +1,6 @@
-# CG Production Data Assistant
+# CG Production Metadata Extractor
 
-LLM powered assistant to answer questions about a database of CG assets
+A containerized applicaiton that runs on AWS to extract metadata from an S3 bucket and store it in a database.
 
 ## Overview
 

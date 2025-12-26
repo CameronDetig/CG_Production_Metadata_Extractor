@@ -1,6 +1,6 @@
 # AWS Batch Deployment Guide
 
-This guide covers deploying the CG Production Data Assistant to AWS Batch with S3 storage and RDS PostgreSQL database.
+This guide covers deploying the CG Production Metadata Extractor to AWS Batch with S3 storage and RDS PostgreSQL database.
 
 
 ## Quick Reference: Critical Configuration Checklist

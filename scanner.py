@@ -166,7 +166,7 @@ def main():
     logging.getLogger().setLevel(getattr(logging, log_level))
     
     logger.info("="*50)
-    logger.info("CG Production Data Assistant - Metadata Scanner")
+    logger.info("CG Production Metadata Extractor - Metadata Scanner")
     logger.info("="*50)
     logger.info(f"Storage Type: {storage_type}")
     logger.info(f"Database: {database_url[:100]}...")  # Truncate for security
