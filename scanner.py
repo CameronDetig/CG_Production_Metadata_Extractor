@@ -169,17 +169,33 @@ def main():
     logger.info("CG Production Data Assistant - Metadata Scanner")
     logger.info("="*50)
     logger.info(f"Storage Type: {storage_type}")
-    logger.info(f"Database: {database_url}")
+    logger.info(f"Database: {database_url[:100]}...")  # Truncate for security
+    logger.info(f"Python version: {sys.version}")
+    logger.info(f"Working directory: {os.getcwd()}")
+    
+    # Log environment variables (without sensitive data)
+    if storage_type == 's3':
+        logger.info(f"S3 Bucket: {os.getenv('S3_BUCKET_NAME', 'NOT SET')}")
+        logger.info(f"S3 Prefix: {os.getenv('S3_PREFIX', 'NOT SET')}")
+        logger.info(f"AWS Region: {os.getenv('AWS_REGION', 'NOT SET')}")
+    else:
+        logger.info(f"Data Path: {os.getenv('DATA_PATH', '/data')}")
+    
     logger.info("="*50 + "\n")
     
     try:
         # Create storage adapter
+        logger.info("Creating storage adapter...")
         storage = create_storage_adapter(storage_type)
+        logger.info("Storage adapter created successfully")
         
         # Create database connection
+        logger.info("Connecting to database...")
         db = MetadataDatabase(database_url)
+        logger.info("Database connection established")
         
         # Create scanner and run
+        logger.info("Starting file scan...")
         scanner = FileScanner(storage, db)
         scanner.scan()
         

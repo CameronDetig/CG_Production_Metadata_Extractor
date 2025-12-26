@@ -2,6 +2,35 @@
 
 This guide covers deploying the CG Production Data Assistant to AWS Batch with S3 storage and RDS PostgreSQL database.
 
+
+## Quick Reference: Critical Configuration Checklist
+
+Before running your job, verify these are properly configured:
+
+✅ **Container Image:**
+- [ ] Docker image built with updated Dockerfile
+- [ ] Image pushed to ECR
+- [ ] Job definition points to correct ECR URI
+
+✅ **Environment Variables in Job Definition:**
+- [ ] `STORAGE_TYPE=s3` (NOT local)
+- [ ] `S3_BUCKET_NAME=your-actual-bucket-name`
+- [ ] `S3_PREFIX=production-files/` (or empty for root)
+- [ ] `AWS_REGION=us-east-1` (match your bucket region)
+- [ ] `DATABASE_URL=postgresql://user:password@rds-endpoint:5432/postgres`
+
+✅ **IAM Permissions:**
+- [ ] IAM role attached to job definition
+- [ ] Role has `s3:GetObject` and `s3:ListBucket` on your bucket
+- [ ] Role has `AmazonECSTaskExecutionRolePolicy`
+
+✅ **Networking:**
+- [ ] RDS security group allows inbound from Batch compute environment
+- [ ] RDS and Batch are in same VPC (or VPC peering configured)
+
+
+
+
 ## Architecture Overview
 
 ```
@@ -75,6 +104,9 @@ This should look something like:
   - g-metadata-db-instance-1-us-east-1b &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; # Reader instance
 
 
+To make it easier to connect to the database from your local machine, on the cg-metadata-db-instance-1 you can set the public access setting to "publicly available".
+
+
 ### Initialize Database Schema
 
 The application will automatically create tables on first run using SQLAlchemy. No manual schema creation needed!
@@ -104,6 +136,7 @@ aws s3 sync ./local-data s3://my-cg-production-files/production-files/
 ```bash
 aws s3 ls s3://my-cg-production-files/production-files/ --recursive
 ```
+
 
 ## Step 3: Build and Push Docker Image to ECR
 
@@ -243,7 +276,7 @@ This will allows the batch process access to the s3 container with the files.
      AWS_REGION=us-east-1
 
                       # use the password you made earlier for the database
-     DATABASE_URL=postgresql://postgres:password@rds-endpoint:5432/postgres
+     DATABASE_URL=postgresql://postgres:<your-db-password>@<your-database-write-endpoint>:5432/postgres
      LOG_LEVEL=INFO
      ```
 
@@ -255,7 +288,6 @@ This will allows the batch process access to the s3 container with the files.
 ### Submit Job (2 options)
 
 ## Option 1: Through the CLI
-
 ```bash
 aws batch submit-job \
   --job-name cg-metadata-scan-$(date +%Y%m%d-%H%M%S) \
@@ -295,6 +327,20 @@ Go to AWS Aurora and RDS - Query Editor
 
 AWS doesn't have a dedicated database viewer, so if you want a GUI, you will need to download a tool. I am using pgAdmin: https://www.pgadmin.org/
 
+To connect to the database, using pgAdmin:
+1. Select "Create" → "Server..."
+2. General Tab
+Name: Give it a name like "AWS cg-metadata-db"
+3. Connection Tab
+Fill in these details:
+
+    - Host name/address: <your database name> (ex. "cg-metadata-db.cluster-corgeqweywqv.us-east-1.rds.amazonaws.com")
+    - Port: 5432
+    - Maintenance database: postgres (start with this default)
+    - Username: postgres
+    - Password: <Your database password you made earlier>
+
+![pgAdmin_connection](images/pgAdmin_connection.png)
 
 Query the database:
 
@@ -308,6 +354,8 @@ SELECT file_type, COUNT(*) FROM files GROUP BY file_type;
 -- Recent scans
 SELECT file_name, scan_date FROM files ORDER BY scan_date DESC LIMIT 10;
 ```
+
+![pgAdmin_view_tablen](images/pgAdmin_view_table.png)
 
 ## Step 7: Automate with Triggers (Optional)
 
@@ -327,6 +375,13 @@ SELECT file_name, scan_date FROM files ORDER BY scan_date DESC LIMIT 10;
 
 ### View Logs
 
+**Option 1: AWS Console**
+1. Go to AWS Batch Console → Jobs
+2. Click on your job
+3. Click "View logs" in the job details
+4. This opens CloudWatch Logs
+
+**Option 2: AWS CLI**
 ```bash
 # Get job ID from Batch console, then:
 aws logs tail /aws/batch/job --follow
@@ -335,22 +390,67 @@ aws logs tail /aws/batch/job --follow
 ### Common Issues
 
 **Job fails immediately:**
-- Check IAM role permissions
+- Check IAM role permissions (S3 read access required)
 - Verify ECR image exists and is accessible
-- Check environment variables in job definition
+- Check environment variables in job definition (especially DATABASE_URL and S3_BUCKET_NAME)
+- Review CloudWatch logs for startup errors
 
 **Cannot connect to RDS:**
-- Verify security group allows inbound from Batch compute environment
-- Check DATABASE_URL is correct
-- Ensure RDS is in same VPC as Batch
+- Verify security group allows inbound PostgreSQL (port 5432) from Batch compute environment
+- Check DATABASE_URL format: `postgresql://username:password@endpoint:5432/dbname`
+- Ensure RDS is in same VPC as Batch compute environment
+- Test connection string locally first using psql or pgAdmin
 
 **S3 access denied:**
-- Verify IAM role has s3:GetObject and s3:ListBucket permissions
-- Check bucket name and prefix are correct
+- Verify IAM role has `s3:GetObject` and `s3:ListBucket` permissions
+- Check bucket name and prefix are correct (no typos)
+- Ensure bucket is in the same region or cross-region access is configured
+- Verify bucket policy doesn't block access
 
 **Out of memory errors:**
-- Increase memory in job definition
-- Process files in smaller batches
+- Increase memory in job definition (try 8 GB or more)
+- Reduce number of concurrent file operations
+- Consider processing large .blend files separately
+
+**Blender extraction fails:**
+- Check if Blender is properly installed in container (test locally first)
+- Increase job timeout in job definition
+- Check .blend file compatibility with Blender version in container
+
+**Container runs but processes 0 files:**
+- Verify `STORAGE_TYPE=s3` is set (not `local`)
+- Check S3_BUCKET_NAME is correct
+- Verify S3_PREFIX matches your folder structure (use empty string for root)
+- Ensure IAM role has ListBucket permission on the bucket
+
+### Debugging Steps
+
+1. **Test container locally first:**
+   ```bash
+   docker run -e STORAGE_TYPE=s3 \
+              -e S3_BUCKET_NAME=your-bucket \
+              -e S3_PREFIX=production-files/ \
+              -e AWS_REGION=us-east-1 \
+              -e DATABASE_URL=postgresql://user:pass@localhost:5432/db \
+              cg-metadata-extractor
+   ```
+
+2. **Check CloudWatch Logs immediately after job fails:**
+   - Look for Python exceptions
+   - Check if storage adapter initializes
+   - Verify database connection succeeds
+
+3. **Test S3 access from container:**
+   ```bash
+   docker run --entrypoint /bin/bash -it cg-metadata-extractor
+   # Inside container:
+   python3 -c "import boto3; s3=boto3.client('s3'); print(s3.list_objects_v2(Bucket='your-bucket', MaxKeys=5))"
+   ```
+
+4. **Verify environment variables:**
+   - Double-check all env vars in job definition
+   - Look for typos in DATABASE_URL
+   - Ensure no extra spaces or quotes
 
 ## Cost Optimization
 

@@ -11,6 +11,13 @@ RUN apt-get update && apt-get install -y \
     libmagic1 \
     ffmpeg \
     libmediainfo0v5 \
+    wget \
+    xz-utils \
+    libgl1-mesa-glx \
+    libxi6 \
+    libxrender1 \
+    libxkbcommon-x11-0 \
+    libsm6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
