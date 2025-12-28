@@ -3,27 +3,28 @@ Video metadata extractor
 Supports: MP4, MOV, AVI, MKV, etc.
 """
 import os
+from pathlib import Path
 import subprocess
 import json
 from datetime import datetime
-import magic
 
 
 def extract_video_metadata(file_path):
     """Extract metadata from video files using ffprobe"""
+    file_path_obj = Path(file_path)
+    
     metadata = {
         'file_path': file_path,
         'file_name': os.path.basename(file_path),
         'file_size': os.path.getsize(file_path),
         'file_type': 'video',
-        'modified_date': datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat(),
-        'created_date': datetime.fromtimestamp(os.path.getctime(file_path)).isoformat(),
+        'modified_date': datetime.fromtimestamp(os.path.getmtime(file_path)),
+        'created_date': datetime.fromtimestamp(os.path.getctime(file_path)),
     }
     
     try:
-        # Get MIME type
-        mime = magic.Magic(mime=True)
-        metadata['mime_type'] = mime.from_file(file_path)
+        # Get file extension
+        metadata['extension'] = file_path_obj.suffix.lower()
         
         # Use ffprobe to extract video metadata
         cmd = [

@@ -103,14 +103,16 @@ class FileScanner:
                 metadata = self._process_with_storage(file_path, extract_unknown_metadata, 'other')
                 self.stats['other_files'] += 1
             
+            
+            # logger.info(f"Debug Metadata: {metadata}")
+
             # Store in database
-            logger.info(f"Debug Metadata: {metadata}")
             if metadata:
                 self.db.insert_metadata(metadata)
                 self.stats['scanned'] += 1
                 
                 if 'error' in metadata:
-                    logger.warning(f"Error extracting metadata: {metadata['error']}")
+                    logger.warning(f"Error extracting metadata from {file_path}: {metadata['error']}")
                     self.stats['errors'] += 1
                     
         except Exception as e:

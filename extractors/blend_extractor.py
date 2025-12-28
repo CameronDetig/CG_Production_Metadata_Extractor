@@ -3,11 +3,11 @@ Blender file metadata extractor
 Extracts metadata from .blend files using Blender's Python API
 """
 import os
+from pathlib import Path
 import subprocess
 import json
 import tempfile
 from datetime import datetime
-import magic
 
 
 # Blender Python script to extract metadata
@@ -90,19 +90,20 @@ extract_blend_metadata()
 
 def extract_blend_metadata(file_path):
     """Extract metadata from .blend files"""
+    file_path_obj = Path(file_path)
+    
     metadata = {
         'file_path': file_path,
         'file_name': os.path.basename(file_path),
         'file_size': os.path.getsize(file_path),
         'file_type': 'blend',
-        'modified_date': datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat(),
-        'created_date': datetime.fromtimestamp(os.path.getctime(file_path)).isoformat(),
+        'modified_date': datetime.fromtimestamp(os.path.getmtime(file_path)),
+        'created_date': datetime.fromtimestamp(os.path.getctime(file_path)),
     }
     
     try:
-        # Get MIME type
-        mime = magic.Magic(mime=True)
-        metadata['mime_type'] = mime.from_file(file_path)
+        # Get file extension
+        metadata['extension'] = file_path_obj.suffix.lower()
         
         # Create temporary script file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as script_file:

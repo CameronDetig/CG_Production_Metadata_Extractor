@@ -13,6 +13,17 @@ from sqlalchemy.pool import NullPool, QueuePool
 Base = declarative_base()
 
 
+def _serialize_for_json(obj: Any) -> Any:
+    """Convert datetime objects to ISO format strings for JSON serialization"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {key: _serialize_for_json(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [_serialize_for_json(item) for item in obj]
+    return obj
+
+
 class File(Base):
     """Main file metadata table"""
     __tablename__ = 'files'
@@ -21,8 +32,8 @@ class File(Base):
     file_path = Column(String(1024), unique=True, nullable=False, index=True)
     file_name = Column(String(255), nullable=False, index=True)
     file_type = Column(String(50), nullable=False, index=True)
+    extension = Column(String(50))
     file_size = Column(Integer)
-    mime_type = Column(String(100))
     created_date = Column(DateTime)
     modified_date = Column(DateTime)
     scan_date = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -183,12 +194,12 @@ class MetadataDatabase:
                 file_record = existing_file
                 file_record.file_name = metadata.get('file_name')
                 file_record.file_type = metadata.get('file_type')
+                file_record.extension = metadata.get('extension')
                 file_record.file_size = metadata.get('file_size')
-                file_record.mime_type = metadata.get('mime_type')
                 file_record.created_date = metadata.get('created_date')
                 file_record.modified_date = metadata.get('modified_date')
                 file_record.scan_date = datetime.utcnow()
-                file_record.metadata_json = metadata
+                file_record.metadata_json = _serialize_for_json(metadata)
                 file_record.error = metadata.get('error')
             else:
                 # Create new file record
@@ -196,12 +207,12 @@ class MetadataDatabase:
                     file_path=metadata.get('file_path'),
                     file_name=metadata.get('file_name'),
                     file_type=metadata.get('file_type'),
+                    extension=metadata.get('extension'),
                     file_size=metadata.get('file_size'),
-                    mime_type=metadata.get('mime_type'),
                     created_date=metadata.get('created_date'),
                     modified_date=metadata.get('modified_date'),
                     scan_date=datetime.utcnow(),
-                    metadata_json=metadata,
+                    metadata_json=_serialize_for_json(metadata),
                     error=metadata.get('error')
                 )
                 session.add(file_record)
@@ -295,6 +306,8 @@ class MetadataDatabase:
         finally:
             session.close()
     
+
+
     def get_file_by_path(self, file_path: str) -> Optional[Dict[str, Any]]:
         """Retrieve file metadata by path"""
         session = self.get_session()
@@ -309,7 +322,7 @@ class MetadataDatabase:
                     'file_name': file_record.file_name,
                     'file_type': file_record.file_type,
                     'file_size': file_record.file_size,
-                    'mime_type': file_record.mime_type,
+                    'extension': file_record.extension,
                     'created_date': file_record.created_date,
                     'modified_date': file_record.modified_date,
                     'scan_date': file_record.scan_date,
@@ -320,6 +333,8 @@ class MetadataDatabase:
         finally:
             session.close()
     
+
+
     def get_all_files(self, file_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieve all files, optionally filtered by type"""
         session = self.get_session()
@@ -338,7 +353,7 @@ class MetadataDatabase:
                 'file_name': f.file_name,
                 'file_type': f.file_type,
                 'file_size': f.file_size,
-                'mime_type': f.mime_type,
+                'extension': f.extension,
                 'created_date': f.created_date,
                 'modified_date': f.modified_date,
                 'scan_date': f.scan_date,
@@ -347,6 +362,8 @@ class MetadataDatabase:
             } for f in files]
         finally:
             session.close()
+    
+
     
     def get_statistics(self) -> Dict[str, Any]:
         """Get database statistics"""

@@ -279,6 +279,8 @@ This will allows the batch process access to the s3 container with the files.
 > [!WARNING]
 > **Security Best Practice**: Store the `DATABASE_URL` in AWS Secrets Manager and reference it in the job definition instead of hardcoding credentials.
 
+In the command prompts box, either delete the default "hello world" command, or replace it with the command to run the scanner file (CMD ["python3", "scanner.py"]).
+
 ## Step 6: Run the Job
 
 ### Submit Job (2 options)

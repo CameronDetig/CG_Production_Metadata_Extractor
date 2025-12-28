@@ -41,8 +41,7 @@ docker-compose build
 
 # Run the scanner
 docker-compose up
-
-# Run in detached mode
+# Or run in detached mode
 docker-compose up -d
 
 # View logs
@@ -80,7 +79,7 @@ For production deployment with S3 and RDS, see the [AWS Batch Deployment Guide](
 
 ### All Files
 - File path, name, size
-- MIME type
+- File extension (e.g., .png, .blend, .mp4)
 - Creation and modification dates
 - Scan timestamp
 
@@ -104,12 +103,12 @@ For production deployment with S3 and RDS, see the [AWS Batch Deployment Guide](
 
 ### Text Files
 - File path, name, size
-- MIME type
+- File extension
 - Creation and modification dates
 
 ### Other Files
 - File path, name, size
-- MIME type
+- File extension
 - Creation and modification dates
 
 ## Database Schema

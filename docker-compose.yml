@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   metadata-extractor:
     build: .
@@ -31,4 +29,3 @@ services:
 
       # Logging
       - LOG_LEVEL=INFO
-    restart: unless-stopped

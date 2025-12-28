@@ -8,7 +8,6 @@ RUN apt-get update && apt-get install -y \
     blender \
     python3 \
     python3-pip \
-    libmagic1 \
     ffmpeg \
     libmediainfo0v5 \
     wget \
