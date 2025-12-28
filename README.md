@@ -1,6 +1,6 @@
 # CG Production Metadata Extractor
 
-A containerized applicaiton that runs on AWS to extract metadata from an S3 bucket and store it in a database.
+A containerized application that runs on AWS to extract metadata from an S3 bucket and store it in a database.
 
 ## Overview
 
@@ -8,6 +8,8 @@ This containerized application extracts metadata from production files including
 - **Images** (PNG, JPG, TIFF, Krita .kra files)
 - **Videos** (MP4, MOV, AVI, MKV)
 - **.blend files** (Blender projects)
+- **Text Files** (TXT, DOC, DOCX, PDF)
+- **Other Files** (All other file types)
 
 Metadata is stored in a database (SQLite for local dev, PostgreSQL for AWS) for querying and analysis.
 
@@ -100,6 +102,16 @@ For production deployment with S3 and RDS, see the [AWS Batch Deployment Guide](
 - Materials and textures (limited)
 - Individual object data
 
+### Text Files
+- File path, name, size
+- MIME type
+- Creation and modification dates
+
+### Other Files
+- File path, name, size
+- MIME type
+- Creation and modification dates
+
 ## Database Schema
 
 ### Main Tables
@@ -107,6 +119,8 @@ For production deployment with S3 and RDS, see the [AWS Batch Deployment Guide](
 - `images` - Image-specific data
 - `videos` - Video-specific data
 - `blend_files` - Blender-specific data
+- `text_files` - Text-specific data
+- `other_files` - Other-specific data
 
 ### Querying the Database
 
@@ -183,7 +197,7 @@ docker-compose logs metadata-extractor
 
 ## AWS Deployment
 
-See [AWS Batch Deployment Guide](docs/aws-batch-deployment.md) for:
+See [AWS Deployment Guide](docs/aws-deployment-guide.md) for:
 - Setting up S3 bucket and RDS PostgreSQL
 - Building and pushing Docker image to ECR
 - Configuring IAM roles and permissions

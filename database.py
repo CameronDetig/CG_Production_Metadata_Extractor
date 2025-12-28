@@ -33,6 +33,8 @@ class File(Base):
     image = relationship("Image", back_populates="file", uselist=False, cascade="all, delete-orphan")
     video = relationship("Video", back_populates="file", uselist=False, cascade="all, delete-orphan")
     blend_file = relationship("BlendFile", back_populates="file", uselist=False, cascade="all, delete-orphan")
+    text_file = relationship("TextFile", back_populates="file", uselist=False, cascade="all, delete-orphan")
+    unknown_file = relationship("UnknownFile", back_populates="file", uselist=False, cascade="all, delete-orphan")
 
 
 class Image(Base):
@@ -84,6 +86,26 @@ class BlendFile(Base):
     lights = Column(Integer)
     
     file = relationship("File", back_populates="blend_file")
+
+
+class TextFile(Base):
+    """Text file-specific metadata"""
+    __tablename__ = 'text_files'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    
+    file = relationship("File", back_populates="text_file")
+
+
+class UnknownFile(Base):
+    """Unknown/Other file-specific metadata"""
+    __tablename__ = 'unknown_files'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    
+    file = relationship("File", back_populates="unknown_file")
 
 
 class MetadataDatabase:
@@ -243,6 +265,26 @@ class MetadataDatabase:
                     bit_rate=metadata.get('bit_rate')
                 )
                 session.add(video_record)
+            
+            elif metadata.get('file_type') == 'text':
+                # Delete existing text record if updating
+                if existing_file and file_record.text_file:
+                    session.delete(file_record.text_file)
+                
+                text_record = TextFile(
+                    file_id=file_id
+                )
+                session.add(text_record)
+
+            elif metadata.get('file_type') == 'other':
+                # Delete existing unknown record if updating
+                if existing_file and file_record.unknown_file:
+                    session.delete(file_record.unknown_file)
+                
+                unknown_record = UnknownFile(
+                    file_id=file_id
+                )
+                session.add(unknown_record)
             
             session.commit()
             return file_id

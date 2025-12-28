@@ -14,6 +14,8 @@ from storage_adapter import create_storage_adapter
 from extractors.image_extractor import extract_image_metadata
 from extractors.video_extractor import extract_video_metadata
 from extractors.blend_extractor import extract_blend_metadata
+from extractors.text_extractor import extract_text_metadata
+from extractors.unknown_extractor import extract_unknown_metadata
 
 
 # Configure logging
@@ -27,6 +29,7 @@ logger = logging.getLogger(__name__)
 # File extension mappings
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.gif', '.kra', '.psd'}
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv'}
+TEXT_EXTENSIONS = {'.txt', '.pdf', '.doc', '.docx'}
 BLEND_EXTENSIONS = {'.blend'}
 
 
@@ -45,7 +48,9 @@ class FileScanner:
             'scanned': 0,
             'images': 0,
             'videos': 0,
+            'text_files': 0,
             'blend_files': 0,
+            'other_files': 0,
             'errors': 0,
             'skipped': 0
         }
@@ -90,12 +95,16 @@ class FileScanner:
                 metadata = self._process_with_storage(file_path, extract_blend_metadata, 'blend')
                 self.stats['blend_files'] += 1
                 
+            elif file_ext in TEXT_EXTENSIONS:
+                metadata = self._process_with_storage(file_path, extract_text_metadata, 'text')
+                self.stats['text_files'] += 1
+                
             else:
-                logger.debug(f"Skipping unsupported file type: {file_path}")
-                self.stats['skipped'] += 1
-                return
+                metadata = self._process_with_storage(file_path, extract_unknown_metadata, 'other')
+                self.stats['other_files'] += 1
             
             # Store in database
+            logger.info(f"Debug Metadata: {metadata}")
             if metadata:
                 self.db.insert_metadata(metadata)
                 self.stats['scanned'] += 1
@@ -108,6 +117,7 @@ class FileScanner:
             logger.error(f"Failed to process {file_path}: {str(e)}")
             self.stats['errors'] += 1
     
+
     def _process_with_storage(self, file_path: str, extractor_func, file_type: str) -> Dict[str, Any]:
         """
         Process a file using the storage adapter
@@ -116,7 +126,7 @@ class FileScanner:
         Args:
             file_path: Path to file (local or S3 URI)
             extractor_func: Function to extract metadata
-            file_type: Type of file (image, video, blend)
+            file_type: Type of file (image, video, blend, etc)
             
         Returns:
             Metadata dictionary
@@ -129,20 +139,25 @@ class FileScanner:
             # Ensure file_path in metadata is the original path (not temp path)
             if metadata:
                 metadata['file_path'] = file_path
+                # Safety enforcement to make sure the type matches what the scanner decided it was 
                 metadata['file_type'] = file_type
             
             return metadata
         # Temp file automatically cleaned up here for S3
     
+
     def print_summary(self):
         """Print scan summary"""
+
         logger.info("\n" + "="*50)
         logger.info("SCAN SUMMARY")
         logger.info("="*50)
         logger.info(f"Total files scanned: {self.stats['scanned']}")
         logger.info(f"  - Images: {self.stats['images']}")
         logger.info(f"  - Videos: {self.stats['videos']}")
+        logger.info(f"  - Text files: {self.stats['text_files']}")
         logger.info(f"  - Blend files: {self.stats['blend_files']}")
+        logger.info(f"  - Other files: {self.stats['other_files']}")
         logger.info(f"Errors: {self.stats['errors']}")
         logger.info(f"Skipped: {self.stats['skipped']}")
         
@@ -157,6 +172,7 @@ class FileScanner:
 
 def main():
     """Main entry point"""
+    
     # Get configuration from environment
     storage_type = os.getenv('STORAGE_TYPE', 'local').lower()
     database_url = os.getenv('DATABASE_URL', 'sqlite:///./db/metadata.db')

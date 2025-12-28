@@ -1,4 +1,4 @@
-# AWS Batch Deployment Guide
+# AWS Deployment Guide
 
 This guide covers deploying the CG Production Metadata Extractor to AWS Batch with S3 storage and RDS PostgreSQL database.
 
@@ -86,25 +86,21 @@ Make sure you have docker installed and running: https://www.docker.com/
 
 1. Go to AWS RDS Console
 2. Click "Create database"
-3. Choose PostgreSQL engine
-4. Select appropriate instance size (e.g., db.t3.micro for testing)
-5. Configure:
+3. For Engine type, choose "PostgreSQL" (not "Aurora (PostgreSQL Compatible)")
+4. Template: for minimal cost, choose "Sandbox" 
+5. Select "Single AZ (Availability Zone)"
+6. Configure:
    - DB instance identifier: `cg-metadata-db`
    - Master username: `postgres`
    - Master password: (create a password and save for use later)
-   - VPC: Default or custom
+   - Select instance size (e.g., burstable classes: db.t4g.micro for testing)
+   - VPC: Default or custom (if you have a custom VPC, make sure to select it)
    - Public access: No (for security)
    - RDS Data API: enable
-6. Create database
+7. Create database
 
 
-This should look something like:
-- ch-metadata-db &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  # Regional cluster
-  - cg-metadata-db-instance-1 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; #  Writer instance
-  - g-metadata-db-instance-1-us-east-1b &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; # Reader instance
-
-
-To make it easier to connect to the database from your local machine, on the cg-metadata-db-instance-1 you can set the public access setting to "publicly available".
+To make it easier to connect to the database from your local machine, you can set the public access setting to "publicly available".
 
 
 ### Initialize Database Schema
@@ -319,11 +315,6 @@ SUBMITTED → PENDING → RUNNABLE → STARTING → RUNNING → SUCCEEDED/FAILED
 ### Check Results
 
 Connect to RDS: 
-
-Go to AWS Aurora and RDS - Query Editor
-
-![connect to rds](images/connect_to_db.png)
-
 
 AWS doesn't have a dedicated database viewer, so if you want a GUI, you will need to download a tool. I am using pgAdmin: https://www.pgadmin.org/
 
