@@ -44,7 +44,7 @@ def extract_video_metadata(file_path):
             # Extract format information
             if 'format' in ffprobe_data:
                 fmt = ffprobe_data['format']
-                metadata['duration'] = float(fmt.get('duration', 0))
+                metadata['duration'] = round(float(fmt.get('duration', 0)), 1)
                 metadata['bit_rate'] = int(fmt.get('bit_rate', 0))
                 metadata['format_name'] = fmt.get('format_name', '')
                 

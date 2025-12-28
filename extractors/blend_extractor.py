@@ -11,77 +11,46 @@ from datetime import datetime
 
 
 # Blender Python script to extract metadata
+# This script is run directly in Blender, so it is first written as a string so it can be passed to Blender.
 BLENDER_SCRIPT = """
 import bpy
 import json
 import sys
 
 def extract_blend_metadata():
-    data = {
-        'scene_info': {},
-        'objects': [],
-        'materials': [],
-        'textures': [],
-        'render_settings': {},
-        'statistics': {}
+    blend_data = {
+        'num_frames': None,
+        'fps': None,
+        'engine': None,
+        'resolution_x': None,
+        'resolution_y': None,
+        'resolution_percentage': None,
+        'total_objects': None,
+        'meshes': None,
+        'cameras': None,
+        'lights': None,
+        'empties': None
     }
     
     # Scene information
     scene = bpy.context.scene
-    data['scene_info'] = {
-        'name': scene.name,
-        'frame_start': scene.frame_start,
-        'frame_end': scene.frame_end,
-        'frame_current': scene.frame_current,
-        'fps': scene.render.fps,
-    }
+    blend_data['num_frames'] = scene.frame_end - scene.frame_start
+    blend_data['fps'] = scene.render.fps
     
     # Render settings
-    data['render_settings'] = {
-        'engine': scene.render.engine,
-        'resolution_x': scene.render.resolution_x,
-        'resolution_y': scene.render.resolution_y,
-        'resolution_percentage': scene.render.resolution_percentage,
-        'file_format': scene.render.image_settings.file_format,
-    }
+    blend_data['engine'] = scene.render.engine
+    blend_data['resolution_x'] = scene.render.resolution_x
+    blend_data['resolution_y'] = scene.render.resolution_y
     
-    # Object statistics
-    data['statistics'] = {
-        'total_objects': len(bpy.data.objects),
-        'meshes': len([o for o in bpy.data.objects if o.type == 'MESH']),
-        'cameras': len([o for o in bpy.data.objects if o.type == 'CAMERA']),
-        'lights': len([o for o in bpy.data.objects if o.type == 'LIGHT']),
-        'empties': len([o for o in bpy.data.objects if o.type == 'EMPTY']),
-    }
-    
-    # Objects (limited to avoid huge data)
-    for obj in list(bpy.data.objects)[:100]:  # Limit to first 100 objects
-        obj_data = {
-            'name': obj.name,
-            'type': obj.type,
-            'location': list(obj.location),
-        }
-        if obj.type == 'MESH' and obj.data:
-            obj_data['vertices'] = len(obj.data.vertices)
-            obj_data['polygons'] = len(obj.data.polygons)
-        data['objects'].append(obj_data)
-    
-    # Materials
-    for mat in list(bpy.data.materials)[:50]:  # Limit to first 50
-        data['materials'].append({
-            'name': mat.name,
-            'use_nodes': mat.use_nodes,
-        })
-    
-    # Textures
-    for tex in list(bpy.data.textures)[:50]:  # Limit to first 50
-        data['textures'].append({
-            'name': tex.name,
-            'type': tex.type,
-        })
+    # Statistics
+    blend_data['total_objects'] = len(bpy.data.objects)
+    blend_data['meshes'] = len([o for o in bpy.data.objects if o.type == 'MESH'])
+    blend_data['cameras'] = len([o for o in bpy.data.objects if o.type == 'CAMERA'])
+    blend_data['lights'] = len([o for o in bpy.data.objects if o.type == 'LIGHT'])
+    blend_data['empties'] = len([o for o in bpy.data.objects if o.type == 'EMPTY'])
     
     print("BLEND_METADATA_START")
-    print(json.dumps(data))
+    print(json.dumps(blend_data))
     print("BLEND_METADATA_END")
 
 extract_blend_metadata()
@@ -114,7 +83,7 @@ def extract_blend_metadata(file_path):
             # Run Blender in background mode
             cmd = [
                 'blender',
-                '-b',  # Background mode
+                '-b',  # run in background 
                 file_path,
                 '-P', script_path,  # Python script
                 '--',
@@ -130,11 +99,27 @@ def extract_blend_metadata(file_path):
             # Parse output
             output = result.stdout
             if 'BLEND_METADATA_START' in output:
+                # The print statement from the blender file starts with BLEND_METADATA_START and ends with BLEND_METADATA_END
                 start = output.find('BLEND_METADATA_START') + len('BLEND_METADATA_START')
                 end = output.find('BLEND_METADATA_END')
+
+                # get just the print statement between the start and end
                 json_str = output[start:end].strip()
+
+                # load the json string into a dictionary
                 blend_data = json.loads(json_str)
-                metadata['blend_data'] = blend_data
+
+                # Extract blend_data fields into the main metadata dictionary
+                metadata['num_frames'] = blend_data.get('num_frames')
+                metadata['fps'] = blend_data.get('fps')
+                metadata['engine'] = blend_data.get('engine')
+                metadata['resolution_x'] = blend_data.get('resolution_x')
+                metadata['resolution_y'] = blend_data.get('resolution_y')
+                metadata['total_objects'] = blend_data.get('total_objects')
+                metadata['meshes'] = blend_data.get('meshes')
+                metadata['cameras'] = blend_data.get('cameras')
+                metadata['lights'] = blend_data.get('lights')
+                metadata['empties'] = blend_data.get('empties')
             else:
                 metadata['error'] = 'Could not extract Blender metadata'
                 

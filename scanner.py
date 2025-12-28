@@ -151,9 +151,9 @@ class FileScanner:
     def print_summary(self):
         """Print scan summary"""
 
-        logger.info("\n" + "="*50)
-        logger.info("SCAN SUMMARY")
-        logger.info("="*50)
+        logger.info("\n\n" + "="*50)
+        logger.info("SCAN SUMMARY:")
+        logger.info("="*25)
         logger.info(f"Total files scanned: {self.stats['scanned']}")
         logger.info(f"  - Images: {self.stats['images']}")
         logger.info(f"  - Videos: {self.stats['videos']}")

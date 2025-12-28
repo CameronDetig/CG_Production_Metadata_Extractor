@@ -7,7 +7,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from PIL import Image
-from PIL.ExifTags import TAGS
+
 from datetime import datetime
 
 
@@ -30,7 +30,6 @@ def _extract_kra_metadata(file_path):
                     return {
                         'width': int(width) if width else None,
                         'height': int(height) if height else None,
-                        'format': 'KRA',
                         'mode': colorspacename
                     }
     except Exception:
@@ -67,18 +66,9 @@ def extract_image_metadata(file_path):
             with Image.open(file_path) as img:
                 metadata['width'] = img.width
                 metadata['height'] = img.height
-                metadata['format'] = img.format
                 metadata['mode'] = img.mode
                 
-                # Extract EXIF data if available
-                exif_data = {}
-                if hasattr(img, '_getexif') and img._getexif():
-                    exif = img._getexif()
-                    for tag_id, value in exif.items():
-                        tag = TAGS.get(tag_id, tag_id)
-                        exif_data[tag] = str(value)
-                
-                metadata['exif'] = exif_data
+
             
     except Exception as e:
         metadata['error'] = str(e)

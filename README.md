@@ -85,7 +85,7 @@ For production deployment with S3 and RDS, see the [AWS Batch Deployment Guide](
 
 ### Images
 - Dimensions (width × height)
-- Format and color mode
+- Color mode
 - EXIF data (if available)
 
 ### Videos

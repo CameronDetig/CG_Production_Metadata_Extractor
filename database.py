@@ -29,8 +29,8 @@ class File(Base):
     __tablename__ = 'files'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    file_path = Column(String(1024), unique=True, nullable=False, index=True)
     file_name = Column(String(255), nullable=False, index=True)
+    file_path = Column(String(1024), unique=True, nullable=False, index=True)
     file_type = Column(String(50), nullable=False, index=True)
     extension = Column(String(50))
     file_size = Column(Integer)
@@ -56,7 +56,6 @@ class Image(Base):
     file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
     width = Column(Integer)
     height = Column(Integer)
-    format = Column(String(50))
     mode = Column(String(50))
     
     file = relationship("File", back_populates="image")
@@ -84,9 +83,7 @@ class BlendFile(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
-    scene_name = Column(String(255))
-    frame_start = Column(Integer)
-    frame_end = Column(Integer)
+    num_frames = Column(Integer)
     fps = Column(Integer)
     render_engine = Column(String(100))
     resolution_x = Column(Integer)
@@ -95,6 +92,7 @@ class BlendFile(Base):
     meshes = Column(Integer)
     cameras = Column(Integer)
     lights = Column(Integer)
+    empties = Column(Integer)
     
     file = relationship("File", back_populates="blend_file")
 
@@ -204,8 +202,8 @@ class MetadataDatabase:
             else:
                 # Create new file record
                 file_record = File(
-                    file_path=metadata.get('file_path'),
                     file_name=metadata.get('file_name'),
+                    file_path=metadata.get('file_path'),
                     file_type=metadata.get('file_type'),
                     extension=metadata.get('extension'),
                     file_size=metadata.get('file_size'),
@@ -220,30 +218,26 @@ class MetadataDatabase:
             
             file_id = file_record.id
             
-            # Insert type-specific metadata
-            if metadata.get('file_type') == 'blend' and 'blend_data' in metadata:
-                blend_data = metadata['blend_data']
-                scene_info = blend_data.get('scene_info', {})
-                render_settings = blend_data.get('render_settings', {})
-                stats = blend_data.get('statistics', {})
-                
+
+            # -------------------- Insert type-specific metadata ---------------------
+
+            if metadata.get('file_type') == 'blend':
                 # Delete existing blend record if updating
                 if existing_file and file_record.blend_file:
                     session.delete(file_record.blend_file)
                 
                 blend_record = BlendFile(
                     file_id=file_id,
-                    scene_name=scene_info.get('name'),
-                    frame_start=scene_info.get('frame_start'),
-                    frame_end=scene_info.get('frame_end'),
-                    fps=scene_info.get('fps'),
-                    render_engine=render_settings.get('engine'),
-                    resolution_x=render_settings.get('resolution_x'),
-                    resolution_y=render_settings.get('resolution_y'),
-                    total_objects=stats.get('total_objects'),
-                    meshes=stats.get('meshes'),
-                    cameras=stats.get('cameras'),
-                    lights=stats.get('lights')
+                    num_frames=metadata.get('num_frames'),
+                    fps=metadata.get('fps'),
+                    render_engine=metadata.get('engine'),
+                    resolution_x=metadata.get('resolution_x'),
+                    resolution_y=metadata.get('resolution_y'),
+                    total_objects=metadata.get('total_objects'),
+                    meshes=metadata.get('meshes'),
+                    cameras=metadata.get('cameras'),
+                    lights=metadata.get('lights'),
+                    empties=metadata.get('empties')
                 )
                 session.add(blend_record)
             
@@ -256,7 +250,6 @@ class MetadataDatabase:
                     file_id=file_id,
                     width=metadata.get('width'),
                     height=metadata.get('height'),
-                    format=metadata.get('format'),
                     mode=metadata.get('mode')
                 )
                 session.add(image_record)
@@ -318,8 +311,8 @@ class MetadataDatabase:
             if file_record:
                 return {
                     'id': file_record.id,
-                    'file_path': file_record.file_path,
                     'file_name': file_record.file_name,
+                    'file_path': file_record.file_path,
                     'file_type': file_record.file_type,
                     'file_size': file_record.file_size,
                     'extension': file_record.extension,
@@ -349,8 +342,8 @@ class MetadataDatabase:
             
             return [{
                 'id': f.id,
-                'file_path': f.file_path,
                 'file_name': f.file_name,
+                'file_path': f.file_path,
                 'file_type': f.file_type,
                 'file_size': f.file_size,
                 'extension': f.extension,
