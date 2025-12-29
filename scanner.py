@@ -16,6 +16,8 @@ from extractors.video_extractor import extract_video_metadata
 from extractors.blend_extractor import extract_blend_metadata
 from extractors.text_extractor import extract_text_metadata
 from extractors.unknown_extractor import extract_unknown_metadata
+from embedders import MetadataEmbedder, CLIPEmbedder
+from PIL import Image
 
 
 # Configure logging
@@ -34,16 +36,18 @@ BLEND_EXTENSIONS = {'.blend'}
 
 
 class FileScanner:
-    def __init__(self, storage_adapter, database):
+    def __init__(self, storage_adapter, database, skip_embeddings=False):
         """
         Initialize file scanner
         
         Args:
             storage_adapter: StorageAdapter instance (local or S3)
             database: MetadataDatabase instance
+            skip_embeddings: If True, skip embedding generation (faster for development)
         """
         self.storage = storage_adapter
         self.db = database
+        self.skip_embeddings = skip_embeddings
         self.stats = {
             'scanned': 0,
             'images': 0,
@@ -52,8 +56,24 @@ class FileScanner:
             'blend_files': 0,
             'other_files': 0,
             'errors': 0,
-            'skipped': 0
+            'skipped': 0,
+            'embeddings_generated': 0
         }
+        
+        # Lazy load embedders (only if needed)
+        self.metadata_embedder = None
+        self.clip_embedder = None
+        
+        if not skip_embeddings:
+            logger.info("Initializing embedding models...")
+            try:
+                self.metadata_embedder = MetadataEmbedder()
+                self.clip_embedder = CLIPEmbedder()
+                logger.info("Embedding models initialized successfully")
+            except Exception as e:
+                logger.warning(f"Could not initialize embedders: {e}")
+                logger.warning("Continuing without embeddings")
+                self.skip_embeddings = True
     
     def scan(self):
         """Scan all files in the storage"""
@@ -108,6 +128,10 @@ class FileScanner:
 
             # Store in database
             if metadata:
+                # Generate embeddings if enabled
+                if not self.skip_embeddings:
+                    self._generate_embeddings(metadata)
+                
                 self.db.insert_metadata(metadata)
                 self.stats['scanned'] += 1
                 
@@ -147,6 +171,43 @@ class FileScanner:
             return metadata
         # Temp file automatically cleaned up here for S3
     
+    def _generate_embeddings(self, metadata: Dict[str, Any]):
+        """
+        Generate metadata and visual embeddings for a file
+        
+        Args:
+            metadata: Metadata dictionary to add embeddings to
+        """
+        try:
+            # Generate metadata embedding for all files
+            if self.metadata_embedder:
+                metadata_embedding = self.metadata_embedder.embed_metadata(metadata)
+                metadata['metadata_embedding'] = metadata_embedding
+                self.stats['embeddings_generated'] += 1
+            
+            # Generate visual embedding for images, videos, and blend files
+            file_type = metadata.get('file_type')
+            thumbnail_path = metadata.get('thumbnail_path')
+            file_name = metadata.get('file_name')
+            
+            if self.clip_embedder and thumbnail_path and file_type in ['image', 'video', 'blend']:
+                try:
+                    # Generate CLIP embedding from thumbnail
+                    visual_embedding = self.clip_embedder.embed_image(thumbnail_path)
+                    metadata['visual_embedding'] = visual_embedding
+                    logger.debug(f"Generated visual embedding for {file_name}")
+                except FileNotFoundError as e:
+                    logger.error(f"Thumbnail not found for {file_name} ({file_type}): {thumbnail_path}")
+                except Exception as e:
+                    logger.error(f"Failed to generate visual embedding for {file_name} ({file_type}): {type(e).__name__}: {e}")
+                    if file_type == 'blend':
+                        logger.error(f"  Blend file: {metadata.get('file_path')}")
+                        logger.error(f"  Expected thumbnail: {thumbnail_path}")
+        
+        except Exception as e:
+            logger.error(f"Error generating embeddings for {metadata.get('file_name')}: {e}")
+
+    
 
     def print_summary(self):
         """Print scan summary"""
@@ -162,18 +223,33 @@ class FileScanner:
         logger.info(f"  - Other files: {self.stats['other_files']}")
         logger.info(f"Errors: {self.stats['errors']}")
         logger.info(f"Skipped: {self.stats['skipped']}")
+        if not self.skip_embeddings:
+            logger.info(f"Embeddings generated: {self.stats['embeddings_generated']}")
         
         # Get database statistics
         db_stats = self.db.get_statistics()
         logger.info(f"\nDatabase Statistics:")
         logger.info(f"Total files in database: {db_stats['total_files']}")
-        logger.info(f"Total size: {db_stats['total_size_bytes'] / (1024**3):.2f} GB")
-        logger.info(f"Files by type: {db_stats['by_type']}")
+        logger.info(f"Total size of files in database: {db_stats['total_size_bytes'] / (1024**3):.2f} GB")
+        
+        # Format file types properly
+        if db_stats['by_type']:
+            logger.info("Files by type:")
+            for file_type, count in db_stats['by_type'].items():
+                logger.info(f"  - {file_type}: {count}")
+        
         logger.info("="*50 + "\n")
 
 
 def main():
     """Main entry point"""
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='CG Production Metadata Extractor')
+    parser.add_argument('--skip-embeddings', action='store_true',
+                       help='Skip embedding generation (faster for development)')
+    args = parser.parse_args()
     
     # Get configuration from environment
     storage_type = os.getenv('STORAGE_TYPE', 'local').lower()
@@ -188,12 +264,14 @@ def main():
     logger.info("="*50)
     logger.info(f"Storage Type: {storage_type}")
     logger.info(f"Database: {database_url[:100]}...")  # Truncate for security
+    logger.info(f"Embeddings: {'DISABLED' if args.skip_embeddings else 'ENABLED'}")
     logger.info(f"Python version: {sys.version}")
     logger.info(f"Working directory: {os.getcwd()}")
     
     # Log environment variables (without sensitive data)
     if storage_type == 's3':
-        logger.info(f"S3 Bucket: {os.getenv('S3_BUCKET_NAME', 'NOT SET')}")
+        logger.info(f"Asset Bucket: {os.getenv('ASSET_BUCKET_NAME', 'NOT SET')}")
+        logger.info(f"Thumbnail Bucket: {os.getenv('THUMBNAIL_BUCKET_NAME', 'NOT SET')}")
         logger.info(f"S3 Prefix: {os.getenv('S3_PREFIX', 'NOT SET')}")
         logger.info(f"AWS Region: {os.getenv('AWS_REGION', 'NOT SET')}")
     else:
@@ -214,7 +292,7 @@ def main():
         
         # Create scanner and run
         logger.info("Starting file scan...")
-        scanner = FileScanner(storage, db)
+        scanner = FileScanner(storage, db, skip_embeddings=args.skip_embeddings)
         scanner.scan()
         
         logger.info("Scan complete!")

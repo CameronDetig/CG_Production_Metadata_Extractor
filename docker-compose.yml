@@ -1,14 +1,36 @@
 services:
+  # PostgreSQL database with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: cg_postgres
+    environment:
+      POSTGRES_USER: cguser
+      POSTGRES_PASSWORD: cgpass
+      POSTGRES_DB: cg_metadata
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./init_pgvector.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U cguser" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   metadata-extractor:
     build: .
     container_name: cg_metadata_extractor
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       # Mount your data directory (read-only) - for local development only
       - ./data:/data:ro
-      # Mount database directory - for SQLite local development
-      - ./db:/app/db
-      # Mount output directory for reports
+      # Mount output directory for reports and thumbnails
       - ./output:/app/output
+      # Mount model cache to avoid re-downloading on each build
+      - model_cache:/root/.cache/huggingface
     environment:
       # Storage configuration
       - STORAGE_TYPE=local # Change to 's3' for AWS deployment
@@ -17,15 +39,20 @@ services:
       - DATA_PATH=/data
 
       # S3 configuration (used when STORAGE_TYPE=s3)
-      # - S3_BUCKET_NAME=your-bucket-name
+      # - ASSET_BUCKET_NAME=your-asset-bucket-name
       # - S3_PREFIX=production-files/
+      # - THUMBNAIL_BUCKET_NAME=your-thumbnail-bucket-name
       # - AWS_REGION=us-east-1
       # Note: AWS credentials should be provided via IAM roles in AWS Batch
 
-      # Database configuration
-      - DATABASE_URL=sqlite:///./db/metadata.db # Local SQLite
-      # For PostgreSQL (AWS RDS), use:
-      # - DATABASE_URL=postgresql://username:password@host:5432/database
+      # Database configuration - PostgreSQL with pgvector
+      - DATABASE_URL=postgresql://cguser:cgpass@postgres:5432/cg_metadata
+
+      # For SQLite (legacy), use:
+      # - DATABASE_URL=sqlite:///./db/metadata.db
 
       # Logging
       - LOG_LEVEL=INFO
+
+volumes:
+  model_cache:

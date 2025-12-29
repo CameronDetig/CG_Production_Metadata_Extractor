@@ -2,6 +2,7 @@
 data/
 .env
 db/
+postgres_data/
 output/
 .DS_Store
 __pycache__

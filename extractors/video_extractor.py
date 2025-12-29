@@ -6,7 +6,11 @@ import os
 from pathlib import Path
 import subprocess
 import json
+import logging
 from datetime import datetime
+from .thumbnail_utils import create_video_thumbnail
+
+logger = logging.getLogger(__name__)
 
 
 def extract_video_metadata(file_path):
@@ -65,6 +69,19 @@ def extract_video_metadata(file_path):
                 metadata['audio_codec'] = audio.get('codec_name')
                 metadata['sample_rate'] = audio.get('sample_rate')
                 metadata['channels'] = audio.get('channels')
+            
+            # Generate thumbnail from middle frame
+            if 'error' not in metadata and metadata.get('duration', 0) > 0:
+                thumbnail_dir = Path('output/thumbnails/videos')
+                thumbnail_dir.mkdir(parents=True, exist_ok=True)
+                
+                base_name = file_path_obj.stem
+                thumbnail_path = thumbnail_dir / f"{base_name}_thumb.jpg"
+                
+                if create_video_thumbnail(file_path, str(thumbnail_path)):
+                    metadata['thumbnail_path'] = str(thumbnail_path)
+                else:
+                    logger.warning(f"Could not create thumbnail for {file_path}")
                 
     except Exception as e:
         metadata['error'] = str(e)

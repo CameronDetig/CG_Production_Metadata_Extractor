@@ -49,6 +49,21 @@ class StorageAdapter(ABC):
     def file_exists(self, file_path: str) -> bool:
         """Check if a file exists"""
         pass
+    
+    @abstractmethod
+    def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str) -> str:
+        """
+        Upload thumbnail to storage
+        
+        Args:
+            thumbnail_path: Local path to thumbnail file
+            file_type: Type of file (image, video, blend)
+            filename: Desired filename for thumbnail
+            
+        Returns:
+            Storage path to uploaded thumbnail
+        """
+        pass
 
 
 class LocalStorageAdapter(StorageAdapter):
@@ -90,6 +105,13 @@ class LocalStorageAdapter(StorageAdapter):
     def file_exists(self, file_path: str) -> bool:
         """Check if file exists locally"""
         return os.path.exists(file_path)
+    
+    def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str) -> str:
+        """
+        For local storage, thumbnails are already in the correct location
+        Just return the path
+        """
+        return thumbnail_path
 
 
 class S3StorageAdapter(StorageAdapter):
@@ -124,6 +146,9 @@ class S3StorageAdapter(StorageAdapter):
             logger.info(f"Connected to S3 bucket: {bucket_name}")
         except Exception as e:
             raise ValueError(f"Cannot access S3 bucket '{bucket_name}': {str(e)}")
+        
+        # Thumbnail bucket (optional, defaults to main bucket)
+        self.thumbnail_bucket = os.getenv('THUMBNAIL_BUCKET_NAME', bucket_name)
     
     def list_files(self, prefix: str = "") -> List[str]:
         """List all files in the S3 bucket with the given prefix"""
@@ -217,6 +242,42 @@ class S3StorageAdapter(StorageAdapter):
             return True
         except:
             return False
+    
+    def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str) -> str:
+        """
+        Upload thumbnail to S3 thumbnail bucket
+        
+        Args:
+            thumbnail_path: Local path to thumbnail file
+            file_type: Type of file (image, video, blend)
+            filename: Desired filename for thumbnail
+            
+        Returns:
+            S3 URI to uploaded thumbnail
+        """
+        # Construct S3 key
+        key = f"{file_type}s/{filename}"
+        
+        try:
+            # Upload with public-read ACL for CDN access
+            self.s3_client.upload_file(
+                thumbnail_path,
+                self.thumbnail_bucket,
+                key,
+                ExtraArgs={
+                    'ACL': 'public-read',
+                    'ContentType': 'image/jpeg'
+                }
+            )
+            
+            s3_uri = f"s3://{self.thumbnail_bucket}/{key}"
+            logger.debug(f"Uploaded thumbnail to {s3_uri}")
+            return s3_uri
+            
+        except Exception as e:
+            logger.error(f"Failed to upload thumbnail: {e}")
+            # Return local path as fallback
+            return thumbnail_path
 
 
 def create_storage_adapter(storage_type: Optional[str] = None, **kwargs) -> StorageAdapter:
@@ -240,9 +301,10 @@ def create_storage_adapter(storage_type: Optional[str] = None, **kwargs) -> Stor
         return LocalStorageAdapter(base_path)
     
     elif storage_type == 's3':
-        bucket_name = kwargs.get('bucket_name') or os.getenv('S3_BUCKET_NAME')
+        # Updated to use ASSET_BUCKET_NAME instead of S3_BUCKET_NAME
+        bucket_name = kwargs.get('bucket_name') or os.getenv('ASSET_BUCKET_NAME') or os.getenv('S3_BUCKET_NAME')
         if not bucket_name:
-            raise ValueError("S3_BUCKET_NAME must be provided for S3 storage")
+            raise ValueError("ASSET_BUCKET_NAME must be provided for S3 storage")
         
         prefix = kwargs.get('prefix') or os.getenv('S3_PREFIX', '')
         region = kwargs.get('region') or os.getenv('AWS_REGION')

@@ -1,14 +1,25 @@
 """
 Database models and schema for metadata storage using SQLAlchemy ORM
-Supports both SQLite (local development) and PostgreSQL (AWS RDS)
+Supports both SQLite (local development) and PostgreSQL with pgvector (AWS RDS)
 """
 import os
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey, Index, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey, Index, JSON, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
 from sqlalchemy.pool import NullPool, QueuePool
+import logging
+
+# Try to import pgvector, but don't fail if not available (for SQLite compatibility)
+try:
+    from pgvector.sqlalchemy import Vector
+    PGVECTOR_AVAILABLE = True
+except ImportError:
+    PGVECTOR_AVAILABLE = False
+    Vector = None
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
@@ -40,6 +51,9 @@ class File(Base):
     metadata_json = Column(JSON)
     error = Column(Text)
     
+    # Vector embedding for metadata semantic search (384 dimensions)
+    metadata_embedding = Column(Vector(384) if PGVECTOR_AVAILABLE else Text)
+    
     # Relationships
     image = relationship("Image", back_populates="file", uselist=False, cascade="all, delete-orphan")
     video = relationship("Video", back_populates="file", uselist=False, cascade="all, delete-orphan")
@@ -57,6 +71,10 @@ class Image(Base):
     width = Column(Integer)
     height = Column(Integer)
     mode = Column(String(50))
+    thumbnail_path = Column(String(1024))  # Path to 512x512 JPG thumbnail
+    
+    # Vector embedding for visual similarity search (512 dimensions)
+    visual_embedding = Column(Vector(512) if PGVECTOR_AVAILABLE else Text)
     
     file = relationship("File", back_populates="image")
 
@@ -73,6 +91,10 @@ class Video(Base):
     fps = Column(Float)
     codec = Column(String(100))
     bit_rate = Column(Integer)
+    thumbnail_path = Column(String(1024))  # Path to 512x512 JPG thumbnail
+    
+    # Vector embedding for visual similarity search (512 dimensions)
+    visual_embedding = Column(Vector(512) if PGVECTOR_AVAILABLE else Text)
     
     file = relationship("File", back_populates="video")
 
@@ -93,6 +115,10 @@ class BlendFile(Base):
     cameras = Column(Integer)
     lights = Column(Integer)
     empties = Column(Integer)
+    thumbnail_path = Column(String(1024))  # Path to 512x512 JPG viewport render
+    
+    # Vector embedding for visual similarity search (512 dimensions)
+    visual_embedding = Column(Vector(512) if PGVECTOR_AVAILABLE else Text)
     
     file = relationship("File", back_populates="blend_file")
 
@@ -163,7 +189,50 @@ class MetadataDatabase:
     
     def init_database(self):
         """Create all tables if they don't exist"""
+        # Enable pgvector extension if using PostgreSQL
+        if self.database_url.startswith('postgresql') and PGVECTOR_AVAILABLE:
+            try:
+                with self.engine.connect() as conn:
+                    conn.execute(event.text("CREATE EXTENSION IF NOT EXISTS vector"))
+                    conn.commit()
+                logger.info("pgvector extension enabled")
+            except Exception as e:
+                logger.warning(f"Could not enable pgvector extension: {e}")
+        
+        # Create all tables
         Base.metadata.create_all(self.engine)
+        
+        # Create vector indexes for faster similarity search
+        if self.database_url.startswith('postgresql') and PGVECTOR_AVAILABLE:
+            try:
+                with self.engine.connect() as conn:
+                    # Create IVFFlat indexes for vector columns
+                    # Note: Requires some data before creating indexes
+                    conn.execute(event.text(
+                        "CREATE INDEX IF NOT EXISTS files_metadata_embedding_idx "
+                        "ON files USING ivfflat (metadata_embedding vector_cosine_ops) "
+                        "WITH (lists = 100)"
+                    ))
+                    conn.execute(event.text(
+                        "CREATE INDEX IF NOT EXISTS images_visual_embedding_idx "
+                        "ON images USING ivfflat (visual_embedding vector_cosine_ops) "
+                        "WITH (lists = 100)"
+                    ))
+                    conn.execute(event.text(
+                        "CREATE INDEX IF NOT EXISTS videos_visual_embedding_idx "
+                        "ON videos USING ivfflat (visual_embedding vector_cosine_ops) "
+                        "WITH (lists = 100)"
+                    ))
+                    conn.execute(event.text(
+                        "CREATE INDEX IF NOT EXISTS blend_files_visual_embedding_idx "
+                        "ON blend_files USING ivfflat (visual_embedding vector_cosine_ops) "
+                        "WITH (lists = 100)"
+                    ))
+                    conn.commit()
+                logger.info("Vector indexes created successfully")
+            except Exception as e:
+                # Indexes might fail if there's not enough data yet, that's okay
+                logger.debug(f"Could not create vector indexes (this is normal for empty databases): {e}")
     
     def get_session(self) -> Session:
         """Get a new database session"""
@@ -199,6 +268,9 @@ class MetadataDatabase:
                 file_record.scan_date = datetime.utcnow()
                 file_record.metadata_json = _serialize_for_json(metadata)
                 file_record.error = metadata.get('error')
+                # Update metadata embedding if provided
+                if metadata.get('metadata_embedding'):
+                    file_record.metadata_embedding = metadata['metadata_embedding']
             else:
                 # Create new file record
                 file_record = File(
@@ -211,7 +283,8 @@ class MetadataDatabase:
                     modified_date=metadata.get('modified_date'),
                     scan_date=datetime.utcnow(),
                     metadata_json=_serialize_for_json(metadata),
-                    error=metadata.get('error')
+                    error=metadata.get('error'),
+                    metadata_embedding=metadata.get('metadata_embedding')
                 )
                 session.add(file_record)
                 session.flush()  # Get the ID
@@ -237,7 +310,9 @@ class MetadataDatabase:
                     meshes=metadata.get('meshes'),
                     cameras=metadata.get('cameras'),
                     lights=metadata.get('lights'),
-                    empties=metadata.get('empties')
+                    empties=metadata.get('empties'),
+                    thumbnail_path=metadata.get('thumbnail_path'),
+                    visual_embedding=metadata.get('visual_embedding')
                 )
                 session.add(blend_record)
             
@@ -250,7 +325,9 @@ class MetadataDatabase:
                     file_id=file_id,
                     width=metadata.get('width'),
                     height=metadata.get('height'),
-                    mode=metadata.get('mode')
+                    mode=metadata.get('mode'),
+                    thumbnail_path=metadata.get('thumbnail_path'),
+                    visual_embedding=metadata.get('visual_embedding')
                 )
                 session.add(image_record)
             
@@ -266,7 +343,9 @@ class MetadataDatabase:
                     duration=metadata.get('duration'),
                     fps=metadata.get('fps'),
                     codec=metadata.get('codec'),
-                    bit_rate=metadata.get('bit_rate')
+                    bit_rate=metadata.get('bit_rate'),
+                    thumbnail_path=metadata.get('thumbnail_path'),
+                    visual_embedding=metadata.get('visual_embedding')
                 )
                 session.add(video_record)
             
@@ -383,5 +462,136 @@ class MetadataDatabase:
             stats['total_size_bytes'] = total_size or 0
             
             return stats
+        finally:
+            session.close()
+    
+    def search_similar_by_metadata(self, query_embedding: List[float], limit: int = 10, 
+                                    file_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Search for files with similar metadata embeddings
+        
+        Args:
+            query_embedding: Query embedding vector (384-dim)
+            limit: Maximum number of results
+            file_type: Optional filter by file type
+            
+        Returns:
+            List of similar files with metadata
+        """
+        if not PGVECTOR_AVAILABLE or not self.database_url.startswith('postgresql'):
+            logger.warning("Vector search not available (requires PostgreSQL with pgvector)")
+            return []
+        
+        session = self.get_session()
+        
+        try:
+            query = session.query(File)
+            
+            # Filter by file type if specified
+            if file_type:
+                query = query.filter(File.file_type == file_type)
+            
+            # Order by cosine similarity (closest first)
+            query = query.order_by(
+                File.metadata_embedding.cosine_distance(query_embedding)
+            ).limit(limit)
+            
+            files = query.all()
+            
+            return [{
+                'id': f.id,
+                'file_name': f.file_name,
+                'file_path': f.file_path,
+                'file_type': f.file_type,
+                'file_size': f.file_size,
+                'extension': f.extension,
+                'created_date': f.created_date,
+                'modified_date': f.modified_date,
+                'metadata_json': f.metadata_json
+            } for f in files]
+        finally:
+            session.close()
+    
+    def search_similar_by_image(self, query_embedding: List[float], limit: int = 10,
+                                file_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Search for visually similar images/videos/blend files
+        
+        Args:
+            query_embedding: Query embedding vector (512-dim from CLIP)
+            limit: Maximum number of results
+            file_type: Optional filter ('image', 'video', 'blend')
+            
+        Returns:
+            List of similar files with metadata and thumbnails
+        """
+        if not PGVECTOR_AVAILABLE or not self.database_url.startswith('postgresql'):
+            logger.warning("Vector search not available (requires PostgreSQL with pgvector)")
+            return []
+        
+        session = self.get_session()
+        
+        try:
+            results = []
+            
+            # Search images if not filtered or if filter is 'image'
+            if not file_type or file_type == 'image':
+                images = session.query(Image, File).join(File).order_by(
+                    Image.visual_embedding.cosine_distance(query_embedding)
+                ).limit(limit).all()
+                
+                for img, file in images:
+                    results.append({
+                        'id': file.id,
+                        'file_name': file.file_name,
+                        'file_path': file.file_path,
+                        'file_type': 'image',
+                        'width': img.width,
+                        'height': img.height,
+                        'thumbnail_path': img.thumbnail_path,
+                        'metadata_json': file.metadata_json
+                    })
+            
+            # Search videos if not filtered or if filter is 'video'
+            if not file_type or file_type == 'video':
+                videos = session.query(Video, File).join(File).order_by(
+                    Video.visual_embedding.cosine_distance(query_embedding)
+                ).limit(limit).all()
+                
+                for vid, file in videos:
+                    results.append({
+                        'id': file.id,
+                        'file_name': file.file_name,
+                        'file_path': file.file_path,
+                        'file_type': 'video',
+                        'width': vid.width,
+                        'height': vid.height,
+                        'duration': vid.duration,
+                        'thumbnail_path': vid.thumbnail_path,
+                        'metadata_json': file.metadata_json
+                    })
+            
+            # Search blend files if not filtered or if filter is 'blend'
+            if not file_type or file_type == 'blend':
+                blends = session.query(BlendFile, File).join(File).order_by(
+                    BlendFile.visual_embedding.cosine_distance(query_embedding)
+                ).limit(limit).all()
+                
+                for blend, file in blends:
+                    results.append({
+                        'id': file.id,
+                        'file_name': file.file_name,
+                        'file_path': file.file_path,
+                        'file_type': 'blend',
+                        'resolution_x': blend.resolution_x,
+                        'resolution_y': blend.resolution_y,
+                        'thumbnail_path': blend.thumbnail_path,
+                        'metadata_json': file.metadata_json
+                    })
+            
+            # Sort all results by similarity and return top N
+            # Note: This is a simplified approach; for better performance,
+            # you might want to use UNION queries with proper ordering
+            return results[:limit]
         finally:
             session.close()

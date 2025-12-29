@@ -17,7 +17,11 @@ RUN apt-get update && apt-get install -y \
     libxrender1 \
     libxkbcommon-x11-0 \
     libsm6 \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
+
+# Create python symlink so both 'python' and 'python3' work
+RUN ln -s /usr/bin/python3 /usr/bin/python
 
 # Set working directory
 WORKDIR /app

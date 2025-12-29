@@ -14,4 +14,14 @@ psycopg2-binary>=2.9.0
 # Configuration management
 python-dotenv>=1.0.0
 
-# Database (SQLite is built-in to Python)
+# Vector database
+pgvector>=0.2.0
+
+# Local Embedding models
+sentence-transformers>=2.2.0
+transformers>=4.30.0
+torch>=2.0.0
+
+# CLIP dependencies
+ftfy>=6.1.0
+regex>=2023.0.0
