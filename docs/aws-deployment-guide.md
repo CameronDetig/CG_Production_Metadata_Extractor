@@ -14,8 +14,9 @@ Before running your job, verify these are properly configured:
 
 ✅ **Environment Variables in Job Definition:**
 - [ ] `STORAGE_TYPE=s3` (NOT local)
-- [ ] `S3_BUCKET_NAME=your-actual-bucket-name`
+- [ ] `ASSET_BUCKET_NAME=your-actual-bucket-name`
 - [ ] `S3_PREFIX=production-files/` (or empty for root)
+- [ ] `THUMBNAIL_BUCKET_NAME=your-thumbnail-bucket-name`
 - [ ] `AWS_REGION=us-east-1` (match your bucket region)
 - [ ] `DATABASE_URL=postgresql://user:password@rds-endpoint:5432/postgres`
 
@@ -133,6 +134,14 @@ aws s3 sync ./local-data s3://my-cg-production-files/production-files/
 aws s3 ls s3://my-cg-production-files/production-files/ --recursive
 ```
 
+### Create Thumbnail Bucket
+
+Store thumbnails in a separate bucket:
+
+```bash
+aws s3 mb s3://my-cg-thumbnails --region us-east-1
+```
+
 
 ## Step 3: Build and Push Docker Image to ECR
 
@@ -168,31 +177,44 @@ This will allows the batch process access to the s3 container with the files.
 
 ```json
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::my-cg-production-files",
-        "arn:aws:s3:::my-cg-production-files/*"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
-      ],
-      "Resource": "arn:aws:logs:*:*:*"
-    }
-  ]
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetObject",
+                "s3:PutObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::cg-production-data",
+                "arn:aws:s3:::cg-production-data/*",
+                "arn:aws:s3:::cg-production-data-thumbnails",
+                "arn:aws:s3:::cg-production-data-thumbnails/*",
+                "arn:aws:s3:::cg-production-data-testing",
+                "arn:aws:s3:::cg-production-data-testing/*",
+                "arn:aws:s3:::cg-production-data-thumbnails-testing",
+                "arn:aws:s3:::cg-production-data-thumbnails-testing/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "arn:aws:logs:*:*:*"
+        }
+    ]
 }
 ```
+
+> [!NOTE]
+> **Bucket Configuration:**
+> - The first statement allows **read access** to your production files bucket
+> - The second statement allows **write access** to upload thumbnails to a separate bucket with public-read ACL for CDN access
+
 
 ### Create IAM Role
 
@@ -247,7 +269,7 @@ This will allows the batch process access to the s3 container with the files.
    - Add Environment variables:
      ```
      STORAGE_TYPE=s3
-     S3_BUCKET_NAME=cg-production-files-bucket-name
+     ASSET_BUCKET_NAME=cg-production-files-bucket-name
 
                       # The S3_PREFIX is the folder path (prefix) within your 
                       # S3 bucket where your production files are stored. 
@@ -269,6 +291,10 @@ This will allows the batch process access to the s3 container with the files.
                       # if you want to scan a specific folder, use:
                       S3_PREFIX=production-files/
      S3_PREFIX=production-files/
+     
+                      # Separate bucket for thumbnails (for CDN access)
+     THUMBNAIL_BUCKET_NAME=cg-thumbnails-bucket-name
+     
      AWS_REGION=us-east-1
 
                       # use the password you made earlier for the database
@@ -385,7 +411,7 @@ aws logs tail /aws/batch/job --follow
 **Job fails immediately:**
 - Check IAM role permissions (S3 read access required)
 - Verify ECR image exists and is accessible
-- Check environment variables in job definition (especially DATABASE_URL and S3_BUCKET_NAME)
+- Check environment variables in job definition (especially DATABASE_URL and ASSET_BUCKET_NAME)
 - Review CloudWatch logs for startup errors
 
 **Cannot connect to RDS:**
@@ -412,7 +438,7 @@ aws logs tail /aws/batch/job --follow
 
 **Container runs but processes 0 files:**
 - Verify `STORAGE_TYPE=s3` is set (not `local`)
-- Check S3_BUCKET_NAME is correct
+- Check ASSET_BUCKET_NAME is correct
 - Verify S3_PREFIX matches your folder structure (use empty string for root)
 - Ensure IAM role has ListBucket permission on the bucket
 
@@ -421,7 +447,7 @@ aws logs tail /aws/batch/job --follow
 1. **Test container locally first:**
    ```bash
    docker run -e STORAGE_TYPE=s3 \
-              -e S3_BUCKET_NAME=your-bucket \
+              -e ASSET_BUCKET_NAME=your-bucket \
               -e S3_PREFIX=production-files/ \
               -e AWS_REGION=us-east-1 \
               -e DATABASE_URL=postgresql://user:pass@localhost:5432/db \

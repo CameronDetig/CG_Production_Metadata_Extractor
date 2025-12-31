@@ -167,6 +167,35 @@ class FileScanner:
                 metadata['file_path'] = file_path
                 # Safety enforcement to make sure the type matches what the scanner decided it was 
                 metadata['file_type'] = file_type
+                
+                # Upload thumbnail to S3 if it exists (when using S3 storage)
+                thumbnail_path = metadata.get('thumbnail_path')
+                if thumbnail_path and os.path.exists(thumbnail_path):
+                    # Store local path for embedding generation (before upload changes it to S3 URI)
+                    metadata['_local_thumbnail_path'] = thumbnail_path
+                    temp_dir = None
+                    try:
+                        # Save the temp directory path for cleanup
+                        temp_dir = Path(thumbnail_path).parent
+                        
+                        # Generate a unique filename for the thumbnail
+                        original_filename = Path(file_path).stem
+                        thumbnail_filename = f"{original_filename}_thumb.jpg"
+                        
+                        # Upload thumbnail and get S3 URI
+                        s3_thumbnail_uri = self.storage.upload_thumbnail(
+                            thumbnail_path, 
+                            file_type, 
+                            thumbnail_filename
+                        )
+                        
+                        # Update metadata with S3 URI (or keep local path if no upload)
+                        metadata['thumbnail_path'] = s3_thumbnail_uri
+                        logger.info(f"Uploaded thumbnail: {s3_thumbnail_uri}")
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to upload thumbnail for {file_path}: {e}")
+                        # Keep the local path in metadata for embeddings
             
             return metadata
         # Temp file automatically cleaned up here for S3
@@ -187,7 +216,8 @@ class FileScanner:
             
             # Generate visual embedding for images, videos, and blend files
             file_type = metadata.get('file_type')
-            thumbnail_path = metadata.get('thumbnail_path')
+            # Use local thumbnail path if available (before S3 upload), otherwise use S3 URI
+            thumbnail_path = metadata.get('_local_thumbnail_path') or metadata.get('thumbnail_path')
             file_name = metadata.get('file_name')
             
             if self.clip_embedder and thumbnail_path and file_type in ['image', 'video', 'blend']:
@@ -206,6 +236,28 @@ class FileScanner:
         
         except Exception as e:
             logger.error(f"Error generating embeddings for {metadata.get('file_name')}: {e}")
+        
+        finally:
+            # Clean up temporary thumbnail after embeddings are generated
+            local_thumbnail = metadata.get('_local_thumbnail_path')
+            if local_thumbnail and os.path.exists(local_thumbnail):
+                try:
+                    temp_dir = Path(local_thumbnail).parent
+                    os.remove(local_thumbnail)
+                    logger.debug(f"Deleted temp thumbnail: {local_thumbnail}")
+                    
+                    # Remove temp directory if empty
+                    if temp_dir.exists() and temp_dir.name.endswith('_thumb_'):
+                        try:
+                            temp_dir.rmdir()
+                            logger.debug(f"Deleted temp directory: {temp_dir}")
+                        except:
+                            pass
+                except Exception as e:
+                    logger.debug(f"Could not delete temp thumbnail: {e}")
+            
+            # Clean up temporary metadata fields
+            metadata.pop('_local_thumbnail_path', None)
 
     
 

@@ -93,11 +93,11 @@ def extract_image_metadata(file_path):
         
         # Generate thumbnail (for all image types)
         if 'error' not in metadata:
-            thumbnail_dir = Path('output/thumbnails/images')
-            thumbnail_dir.mkdir(parents=True, exist_ok=True)
+            import tempfile
+            temp_dir = tempfile.mkdtemp(prefix='image_thumb_')
             
             base_name = file_path_obj.stem
-            thumbnail_path = thumbnail_dir / f"{base_name}_thumb.jpg"
+            thumbnail_path = Path(temp_dir) / f"{base_name}_thumb.jpg"
             
             if create_image_thumbnail(file_path, str(thumbnail_path)):
                 metadata['thumbnail_path'] = str(thumbnail_path)

@@ -5,7 +5,7 @@ Supports both SQLite (local development) and PostgreSQL with pgvector (AWS RDS)
 import os
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey, Index, JSON, event
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey, Index, JSON, event, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
 from sqlalchemy.pool import NullPool, QueuePool
@@ -193,7 +193,7 @@ class MetadataDatabase:
         if self.database_url.startswith('postgresql') and PGVECTOR_AVAILABLE:
             try:
                 with self.engine.connect() as conn:
-                    conn.execute(event.text("CREATE EXTENSION IF NOT EXISTS vector"))
+                    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
                     conn.commit()
                 logger.info("pgvector extension enabled")
             except Exception as e:
@@ -208,22 +208,22 @@ class MetadataDatabase:
                 with self.engine.connect() as conn:
                     # Create IVFFlat indexes for vector columns
                     # Note: Requires some data before creating indexes
-                    conn.execute(event.text(
+                    conn.execute(text(
                         "CREATE INDEX IF NOT EXISTS files_metadata_embedding_idx "
                         "ON files USING ivfflat (metadata_embedding vector_cosine_ops) "
                         "WITH (lists = 100)"
                     ))
-                    conn.execute(event.text(
+                    conn.execute(text(
                         "CREATE INDEX IF NOT EXISTS images_visual_embedding_idx "
                         "ON images USING ivfflat (visual_embedding vector_cosine_ops) "
                         "WITH (lists = 100)"
                     ))
-                    conn.execute(event.text(
+                    conn.execute(text(
                         "CREATE INDEX IF NOT EXISTS videos_visual_embedding_idx "
                         "ON videos USING ivfflat (visual_embedding vector_cosine_ops) "
                         "WITH (lists = 100)"
                     ))
-                    conn.execute(event.text(
+                    conn.execute(text(
                         "CREATE INDEX IF NOT EXISTS blend_files_visual_embedding_idx "
                         "ON blend_files USING ivfflat (visual_embedding vector_cosine_ops) "
                         "WITH (lists = 100)"

@@ -140,7 +140,8 @@ Environment variables (see `.env.example` for full details):
 ### Storage Configuration
 - `STORAGE_TYPE`: `local` or `s3`
 - `DATA_PATH`: Local filesystem path (when STORAGE_TYPE=local)
-- `S3_BUCKET_NAME`: S3 bucket name (when STORAGE_TYPE=s3)
+- `ASSET_BUCKET_NAME`: S3 bucket name for production assets (when STORAGE_TYPE=s3)
+- `THUMBNAIL_BUCKET_NAME`: S3 bucket name for generated thumbnails (when STORAGE_TYPE=s3)
 - `S3_PREFIX`: S3 key prefix/folder (when STORAGE_TYPE=s3)
 - `AWS_REGION`: AWS region for S3
 
@@ -208,7 +209,6 @@ See [AWS Deployment Guide](docs/aws-deployment-guide.md) for:
 
 - Add web interface for browsing metadata
 - Integrate with LLM for natural language queries
-- Add thumbnail generation
 - Implement incremental scanning
 - Export reports to CSV/JSON
 

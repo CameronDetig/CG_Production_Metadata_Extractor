@@ -255,17 +255,17 @@ class S3StorageAdapter(StorageAdapter):
         Returns:
             S3 URI to uploaded thumbnail
         """
-        # Construct S3 key
-        key = f"{file_type}s/{filename}"
+        # Construct S3 key (blend, video, image)
+        key = f"{file_type}/{filename}"
         
         try:
-            # Upload with public-read ACL for CDN access
+            # Upload without ACL (modern buckets have ACLs disabled)
+            # Use bucket policies for public access if needed
             self.s3_client.upload_file(
                 thumbnail_path,
                 self.thumbnail_bucket,
                 key,
                 ExtraArgs={
-                    'ACL': 'public-read',
                     'ContentType': 'image/jpeg'
                 }
             )

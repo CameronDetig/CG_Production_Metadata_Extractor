@@ -72,11 +72,11 @@ def extract_video_metadata(file_path):
             
             # Generate thumbnail from middle frame
             if 'error' not in metadata and metadata.get('duration', 0) > 0:
-                thumbnail_dir = Path('output/thumbnails/videos')
-                thumbnail_dir.mkdir(parents=True, exist_ok=True)
+                import tempfile
+                temp_dir = tempfile.mkdtemp(prefix='video_thumb_')
                 
                 base_name = file_path_obj.stem
-                thumbnail_path = thumbnail_dir / f"{base_name}_thumb.jpg"
+                thumbnail_path = Path(temp_dir) / f"{base_name}_thumb.jpg"
                 
                 if create_video_thumbnail(file_path, str(thumbnail_path)):
                     metadata['thumbnail_path'] = str(thumbnail_path)

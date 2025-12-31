@@ -36,12 +36,12 @@ def extract_blend_metadata(file_path):
         metadata['extension'] = file_path_obj.suffix.lower()
         
         # Create thumbnail directory
-        thumbnail_dir = Path('output/thumbnails/blend')
-        thumbnail_dir.mkdir(parents=True, exist_ok=True)
+        # Use temp directory instead of persistent output directory
+        temp_dir = tempfile.mkdtemp(prefix='blend_thumb_')
         
         # Generate thumbnail filename
         base_name = file_path_obj.stem
-        thumbnail_path = thumbnail_dir / f"{base_name}_thumb.jpg"
+        thumbnail_path = Path(temp_dir) / f"{base_name}_thumb.jpg"
         thumbnail_path_str = str(thumbnail_path.absolute())
         
         # Read the Blender runner script
