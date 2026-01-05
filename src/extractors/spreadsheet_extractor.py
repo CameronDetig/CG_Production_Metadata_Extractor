@@ -63,8 +63,8 @@ def extract_spreadsheet_metadata(file_path):
                 return {
                     'num_sheets': len(sheet_names),
                     'sheet_names': sheet_names,
-                    'total_rows': total_rows,
-                    'total_columns': max_cols
+                    'num_rows': total_rows,
+                    'num_columns': max_cols
                 }
             except Exception as e:
                 return {'error': f"Excel parse error: {str(e)}"}

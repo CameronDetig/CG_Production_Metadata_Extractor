@@ -1,6 +1,6 @@
 """
 Image metadata extractor
-Supports: PNG, JPG, JPEG, TIFF, KRA (Krita), etc.
+Supports: PNG, JPG, JPEG, TIFF, KRA (Krita), SVG, ODG (LibreOffice Draw), etc.
 """
 import os
 import zipfile
@@ -117,6 +117,12 @@ def extract_image_metadata(file_path):
                 metadata['mode'] = 'SVG (vector)'
                 # Don't set resolution for SVG if we can't extract it
         
+        # Special handling for .odg files (LibreOffice Draw)
+        elif metadata['extension'] == '.odg':
+            # Skip PIL processing as it doesn't support ODG
+            metadata['mode'] = 'ODG (vector)'
+            # We could extract metadata from zipped content.xml in future if needed
+        
         else:
             # Try to open with PIL for standard image formats (PNG, JPG, TIFF, EXR, WebP, etc.)
             with Image.open(file_path) as img:
@@ -134,7 +140,10 @@ def extract_image_metadata(file_path):
             base_name = file_path_obj.stem
             thumbnail_path = thumbnail_base / f"{base_name}_thumb.jpg"
             
-            if create_image_thumbnail(file_path, str(thumbnail_path)):
+            # Skip thumbnail generation for .odg (requires LibreOffice)
+            if metadata['extension'] == '.odg':
+                 logger.info(f"Skipping thumbnail generation for ODG file: {file_path}")
+            elif create_image_thumbnail(file_path, str(thumbnail_path)):
                 metadata['thumbnail_path'] = str(thumbnail_path)
             else:
                 logger.warning(f"Could not create thumbnail for {file_path}")

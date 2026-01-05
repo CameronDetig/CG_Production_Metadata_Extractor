@@ -28,6 +28,7 @@ class CLIPEmbedder:
         self.embedding_dim = 512  # Dimension for clip-vit-base-patch32
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
+
     def _load_model(self):
         """Lazy load the model to avoid loading on import"""
         if self.model is None:
@@ -39,9 +40,10 @@ class CLIPEmbedder:
             
             logger.info(f"Loading CLIP model: {self.model_name} on {self.device}")
             self.model = CLIPModel.from_pretrained(self.model_name).to(self.device)
-            self.processor = CLIPProcessor.from_pretrained(self.model_name)
+            self.processor = CLIPProcessor.from_pretrained(self.model_name, use_fast=True)
             logger.info("CLIP model loaded successfully")
     
+
     def _prepare_image(self, image: Union[str, Image.Image, bytes]) -> Image.Image:
         """
         Prepare image for CLIP processing
@@ -64,6 +66,7 @@ class CLIPEmbedder:
         else:
             raise ValueError(f"Unsupported image type: {type(image)}")
     
+    
     def _create_thumbnail(self, image: Image.Image, size: int = 512) -> Image.Image:
         """
         Create a 512x512 thumbnail with aspect ratio preservation
@@ -83,7 +86,7 @@ class CLIPEmbedder:
         new_height = int(height * scale)
         
         # Resize image
-        resized = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        resized = image.resize((new_width, new_height), Image.LANCZOS)
         
         # Create new image with black background
         thumbnail = Image.new('RGB', (size, size), (0, 0, 0))
@@ -189,6 +192,7 @@ class CLIPEmbedder:
             return embeddings, thumbnails
         return embeddings
     
+
     def save_thumbnail(self, thumbnail: Image.Image, output_path: str, quality: int = 85):
         """
         Save thumbnail as JPG

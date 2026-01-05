@@ -189,12 +189,8 @@ class Spreadsheet(Base):
     # Spreadsheet properties
     num_sheets = Column(Integer)  # number of sheets/tabs
     sheet_names = Column(JSON)  # list of sheet names
-    total_rows = Column(Integer)  # total rows across all sheets
-    total_columns = Column(Integer)  # max columns
-    
-    # For CSV files (single sheet)
-    num_rows = Column(Integer)  # rows in CSV
-    num_columns = Column(Integer)  # columns in CSV
+    num_rows = Column(Integer)  # total rows (sum for Excel, count for CSV)
+    num_columns = Column(Integer)  # max columns (max for Excel, count for CSV)
     has_header = Column(Boolean)  # detected header row
     
     file = relationship("File", back_populates="spreadsheet")

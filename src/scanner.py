@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 # File extension mappings
 # File extension mappings
-IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.gif', '.kra', '.psd', '.exr', '.svg', '.webp'}
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.gif', '.kra', '.psd', '.exr', '.svg', '.webp', '.odg'}
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv'}
 BLEND_EXTENSIONS = {'.blend'}
 AUDIO_EXTENSIONS = {'.mp3', '.flac', '.wav', '.ogg', '.m4a', '.aac', '.wma', '.opus'}
@@ -51,7 +51,7 @@ CODE_EXTENSIONS = {
     '.json', '.yaml', '.yml', '.toml', '.ini', '.xml'
 }
 SPREADSHEET_EXTENSIONS = {'.csv', '.xlsx', '.xls', '.ods', '.tsv'}
-DOCUMENT_EXTENSIONS = {'.txt', '.pdf', '.doc', '.docx', '.odt', '.odp', '.odg', '.rtf', '.md'}
+DOCUMENT_EXTENSIONS = {'.txt', '.pdf', '.doc', '.docx', '.odt', '.odp', '.rtf', '.md'}
 
 
 class FileScanner:

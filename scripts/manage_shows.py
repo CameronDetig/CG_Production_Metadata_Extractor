@@ -1,5 +1,23 @@
 """
 CLI tool for managing show metadata
+
+Usage Examples:
+    # List all shows
+    python scripts/manage_shows.py list
+    
+    # View details for a specific show
+    python scripts/manage_shows.py show <show_name>
+    
+    # Add a new show
+    python scripts/manage_shows.py add <show_name> --description "Description" --director "Director Name"
+    
+    # Add a show with release date
+    python scripts/manage_shows.py add <show_name> --release-date 2024-01-15
+    
+    # Delete a show
+    python scripts/manage_shows.py delete <show_name>
+
+Note: This script requires a valid DATABASE_URL in your .env file
 """
 import argparse
 import sys
@@ -60,7 +78,7 @@ def list_shows(args):
     print(f"\nFound {len(shows)} show(s):\n")
     
     for show in shows:
-        print(f"📺 {show['name']}")
+        print(f"{show['name']}")
         if show['description']:
             print(f"   Description: {show['description']}")
         if show['director']:
@@ -84,7 +102,7 @@ def show_details(args):
         print(f"✗ Show '{args.name}' not found")
         return
     
-    print(f"\n📺 {show['name']}")
+    print(f"\n{show['name']}")
     print("=" * 50)
     
     if show['description']:

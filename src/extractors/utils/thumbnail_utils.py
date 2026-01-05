@@ -40,7 +40,7 @@ def create_image_thumbnail(image_path: str, output_path: str, size: int = 512, q
         new_height = int(height * scale)
         
         # Resize image
-        resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        resized = img.resize((new_width, new_height), Image.LANCZOS)
         
         # Create new image with black background
         thumbnail = Image.new('RGB', (size, size), (0, 0, 0))

@@ -14,9 +14,9 @@ Before running your job, verify these are properly configured:
 
 ✅ **Environment Variables in Job Definition:**
 - [ ] `STORAGE_TYPE=s3` (NOT local)
-- [ ] `ASSET_BUCKET_NAME=your-actual-bucket-name`
-- [ ] `S3_PREFIX=production-files/` (or empty for root)
-- [ ] `THUMBNAIL_BUCKET_NAME=your-thumbnail-bucket-name`
+- [ ] `ASSET_BUCKET_NAME=cg-production-data`
+- [ ] `S3_PREFIX=shows/` (or empty for root)
+- [ ] `THUMBNAIL_BUCKET_NAME=cg-production-data-thumbnails`
 - [ ] `AWS_REGION=us-east-1` (match your bucket region)
 - [ ] `DATABASE_URL=postgresql://user:password@rds-endpoint:5432/postgres`
 

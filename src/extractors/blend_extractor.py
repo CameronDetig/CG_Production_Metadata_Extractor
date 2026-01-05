@@ -160,7 +160,7 @@ def extract_blend_metadata(file_path):
             stderr_thread.start()
             
             start_time = time.time()
-            timeout = 45
+            timeout = 120
             stdout_done = False
             stderr_done = False
             
