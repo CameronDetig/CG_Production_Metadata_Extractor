@@ -29,17 +29,25 @@ docker-compose logs -f postgres
 # Look for: "database system is ready to accept connections"
 ```
 
+### 1.5. Enable pgvector Extension (One-time Setup)
+
+Run this command once to enable the vector extension in your database:
+
+```bash
+docker-compose exec postgres psql -U cguser -d cg-metadata-db -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
+
 ### 2. Test Database Connection
 
 ```bash
 # Set environment variable (Windows PowerShell)
-$env:DATABASE_URL="postgresql://cguser:cgpass@localhost:5432/cg_metadata"
+$env:DATABASE_URL="postgresql://cguser:cgpass@localhost:5432/cg-metadata-db"
 
 # Or for Linux/Mac
-export DATABASE_URL="postgresql://cguser:cgpass@localhost:5432/cg_metadata"
+export DATABASE_URL="postgresql://cguser:cgpass@localhost:5432/cg-metadata-db"
 
 # Run test script
-python test_database.py
+python testing/test_database.py
 ```
 
 Expected output:
@@ -49,7 +57,7 @@ Testing PostgreSQL + pgvector Setup
 ==================================================
 
 1. pgvector library available: True
-2. Database URL: postgresql://cguser:cgpass@localhost:5432/cg_metadata
+2. Database URL: postgresql://cguser:cgpass@localhost:5432/cg-metadata-db
 3. Connecting to database...
    ✓ Connection successful!
 4. Testing pgvector extension...
@@ -71,10 +79,10 @@ Testing PostgreSQL + pgvector Setup
 docker-compose build
 
 # Run the scanner (with embeddings)
-docker-compose run --rm metadata-extractor python scanner.py
+docker-compose run --rm metadata-extractor python src/scanner.py
 
 # Or skip embeddings for faster testing
-docker-compose run --rm metadata-extractor python scanner.py --skip-embeddings
+docker-compose run --rm metadata-extractor python src/scanner.py --skip-embeddings
 ```
 
 ---
@@ -141,7 +149,7 @@ If you have pgAdmin 4 installed on your computer:
 #### Connection Tab
 - **Host name/address**: `localhost`
 - **Port**: `5432`
-- **Maintenance database**: `cg_metadata`
+- **Maintenance database**: `cg-metadata-db`
 - **Username**: `cguser`
 - **Password**: `cgpass`
 - ✅ Check **"Save password"**
@@ -150,7 +158,7 @@ Click **Save**!
 
 ### Browse Database
 
-1. **View Tables**: Expand **Servers → CG Metadata → Databases → cg_metadata → Schemas → public → Tables**
+1. **View Tables**: Expand **Servers → CG Metadata → Databases → cg-metadata-db → Schemas → public → Tables**
 2. **View Data**: Right-click any table (e.g., `files`) → **View/Edit Data → All Rows**
 3. **Run Queries**: Click **Tools → Query Tool** (or F4)
 4. **Export Data**: Run query → Click **Download as CSV** (📥 icon)
@@ -186,7 +194,7 @@ SELECT
     (SELECT COUNT(*) FROM images) as total_images,
     (SELECT COUNT(*) FROM videos) as total_videos,
     (SELECT COUNT(*) FROM blend_files) as total_blend_files,
-    (SELECT pg_size_pretty(pg_database_size('cg_metadata'))) as database_size;
+    (SELECT pg_size_pretty(pg_database_size('cg-metadata-db'))) as database_size;
 ```
 
 ### Embedding Coverage
@@ -286,7 +294,7 @@ LIMIT 5;
 ### Required for PostgreSQL
 
 ```bash
-DATABASE_URL=postgresql://cguser:cgpass@postgres:5432/cg_metadata
+DATABASE_URL=postgresql://cguser:cgpass@postgres:5432/cg-metadata-db
 ```
 
 ### Optional for S3 Thumbnails
@@ -344,7 +352,7 @@ docker-compose restart postgres
 
 ```bash
 # Connect to database
-docker-compose exec postgres psql -U cguser -d cg_metadata
+docker-compose exec postgres psql -U cguser -d cg-metadata-db
 
 # Enable extension manually
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -363,7 +371,7 @@ Connection details:
 - **Port**: `5432`
 - **Username**: `cguser`
 - **Password**: `cgpass`
-- **Database**: `cg_metadata`
+- **Database**: `cg-metadata-db`
 
 ### Models Not Downloading
 
@@ -374,7 +382,7 @@ Connection details:
 # Clear cache and retry
 docker-compose down -v
 docker-compose up -d postgres
-docker-compose run --rm metadata-extractor python scanner.py
+docker-compose run --rm metadata-extractor python src/scanner.py
 ```
 
 ### Out of Memory
@@ -383,7 +391,7 @@ If you're processing very large files or running on limited hardware:
 
 ```bash
 # Skip embeddings to reduce memory usage
-python scanner.py --skip-embeddings
+python src/scanner.py --skip-embeddings
 
 # Or increase Docker memory limit
 # Docker Desktop -> Settings -> Resources -> Memory
@@ -398,7 +406,7 @@ If you see `exec: "python": executable file not found`:
 docker-compose build metadata-extractor
 
 # Then run again
-docker-compose run --rm metadata-extractor python scanner.py
+docker-compose run --rm metadata-extractor python src/scanner.py
 ```
 
 ---
@@ -436,10 +444,10 @@ for result in results:
 
 ```bash
 # Full scan with embeddings
-python scanner.py
+python src/scanner.py
 
 # Skip embeddings (faster for development)
-python scanner.py --skip-embeddings
+python src/scanner.py --skip-embeddings
 ```
 
 ---

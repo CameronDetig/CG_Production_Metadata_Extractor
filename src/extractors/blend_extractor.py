@@ -9,7 +9,9 @@ import json
 import tempfile
 import logging
 import time
+
 from datetime import datetime
+import platform
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +38,14 @@ def extract_blend_metadata(file_path):
         metadata['extension'] = file_path_obj.suffix.lower()
         
         # Create thumbnail directory
-        # Use temp directory instead of persistent output directory
-        temp_dir = tempfile.mkdtemp(prefix='blend_thumb_')
+        # Use configurable thumbnail directory (defaults to ./cg-production-data-thumbnails)
+        thumbnail_base_path = os.getenv('THUMBNAIL_PATH', './cg-production-data-thumbnails')
+        thumbnail_base = Path(thumbnail_base_path) / 'blend'
+        thumbnail_base.mkdir(parents=True, exist_ok=True)
         
         # Generate thumbnail filename
         base_name = file_path_obj.stem
-        thumbnail_path = Path(temp_dir) / f"{base_name}_thumb.jpg"
+        thumbnail_path = thumbnail_base / f"{base_name}_thumb.jpg"
         thumbnail_path_str = str(thumbnail_path.absolute())
         
         # Read the Blender runner script
@@ -58,20 +62,44 @@ def extract_blend_metadata(file_path):
             script_path = script_file.name
         
         try:
-            # Run Blender with xvfb-run to provide virtual display for OpenGL rendering
-            # xvfb provides the display context, so we can run "headless" without -b
-            # We do NOT use -b (background) flag because it disables OpenGL
-            cmd = [
-                'xvfb-run',
-                '-a',  # Auto-select display number
-                '-s', '-screen 0 1024x768x24',  # Virtual screen config
-                'blender',
+            # Determine Blender executable
+            blender_exe = os.getenv('BLENDER_EXECUTABLE', 'blender')
+            
+            # Windows-specific handling
+            is_windows = platform.system() == 'Windows'
+            if is_windows and blender_exe == 'blender':
+                # Try to find Blender in common locations if not in PATH
+                common_paths = [
+                    r"C:\Program Files\Blender Foundation\Blender 4.2\blender.exe",
+                    r"C:\Program Files\Blender Foundation\Blender 4.1\blender.exe",
+                    r"C:\Program Files\Blender Foundation\Blender 4.0\blender.exe",
+                    r"C:\Program Files\Blender Foundation\Blender 3.6\blender.exe",
+                    r"C:\Program Files\Blender Foundation\Blender 3.5\blender.exe",
+                ]
+                for p in common_paths:
+                    if os.path.exists(p):
+                        blender_exe = p
+                        break
+            
+            # Construct command
+            cmd = []
+            
+            # Linux specific: Use xvfb-run for headless OpenGL
+            if not is_windows:
+                cmd.extend([
+                    'xvfb-run',
+                    '-a',
+                    '-s', '-screen 0 1024x768x24'
+                ])
+                
+            cmd.extend([
+                blender_exe,
                 '--enable-autoexec',  # Allow Python scripts
-                file_path,
-                '--python', script_path,  # Run Python script
+                str(file_path),       # Convert Path to string just in case
+                '--python', script_path,
                 '--',
                 thumbnail_path_str
-            ]
+            ])
             
             # Set PYTHONPATH so Blender can import our modules
             env = os.environ.copy()
@@ -222,6 +250,7 @@ def extract_blend_metadata(file_path):
                 blend_data = json.loads(json_str)
 
                 # Extract blend_data fields into the main metadata dictionary
+                metadata['blender_version'] = blend_data.get('blender_version')
                 metadata['num_frames'] = blend_data.get('num_frames')
                 metadata['fps'] = blend_data.get('fps')
                 metadata['engine'] = blend_data.get('engine')

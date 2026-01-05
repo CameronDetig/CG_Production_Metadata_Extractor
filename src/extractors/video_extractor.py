@@ -8,7 +8,7 @@ import subprocess
 import json
 import logging
 from datetime import datetime
-from .thumbnail_utils import create_video_thumbnail
+from .utils.thumbnail_utils import create_video_thumbnail
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,8 @@ def extract_video_metadata(file_path):
             video_streams = [s for s in ffprobe_data.get('streams', []) if s['codec_type'] == 'video']
             if video_streams:
                 video = video_streams[0]
-                metadata['width'] = video.get('width')
-                metadata['height'] = video.get('height')
+                metadata['resolution_x'] = video.get('width')
+                metadata['resolution_y'] = video.get('height')
                 metadata['codec'] = video.get('codec_name')
                 metadata['fps'] = eval(video.get('r_frame_rate', '0/1'))
                 metadata['pixel_format'] = video.get('pix_fmt')
@@ -72,11 +72,13 @@ def extract_video_metadata(file_path):
             
             # Generate thumbnail from middle frame
             if 'error' not in metadata and metadata.get('duration', 0) > 0:
-                import tempfile
-                temp_dir = tempfile.mkdtemp(prefix='video_thumb_')
+                # Use configurable thumbnail directory (defaults to ./cg-production-data-thumbnails)
+                thumbnail_base_path = os.getenv('THUMBNAIL_PATH', './cg-production-data-thumbnails')
+                thumbnail_base = Path(thumbnail_base_path) / 'video'
+                thumbnail_base.mkdir(parents=True, exist_ok=True)
                 
                 base_name = file_path_obj.stem
-                thumbnail_path = Path(temp_dir) / f"{base_name}_thumb.jpg"
+                thumbnail_path = thumbnail_base / f"{base_name}_thumb.jpg"
                 
                 if create_video_thumbnail(file_path, str(thumbnail_path)):
                     metadata['thumbnail_path'] = str(thumbnail_path)

@@ -297,7 +297,7 @@ def create_storage_adapter(storage_type: Optional[str] = None, **kwargs) -> Stor
         storage_type = os.getenv('STORAGE_TYPE', 'local').lower()
     
     if storage_type == 'local':
-        base_path = kwargs.get('base_path') or os.getenv('DATA_PATH', '/data')
+        base_path = kwargs.get('base_path') or os.getenv('DATA_PATH', '/app/cg-production-data')
         return LocalStorageAdapter(base_path)
     
     elif storage_type == 's3':

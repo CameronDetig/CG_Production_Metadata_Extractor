@@ -6,12 +6,11 @@ services:
     environment:
       POSTGRES_USER: cguser
       POSTGRES_PASSWORD: cgpass
-      POSTGRES_DB: cg_metadata
+      POSTGRES_DB: cg-metadata-db
     ports:
       - "5432:5432"
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
-      - ./init_pgvector.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U cguser" ]
       interval: 5s
@@ -26,8 +25,10 @@ services:
         condition: service_healthy
     volumes:
       # Mount your data directory (read-only) - for local development only
-      - ./data:/data:ro
-      # Mount output directory for reports and thumbnails
+      - ./cg-production-data:/app/cg-production-data:ro
+      # Mount thumbnails directory
+      - ./cg-production-data-thumbnails:/app/cg-production-data-thumbnails
+      # Mount output directory for reports
       - ./output:/app/output
       # Mount model cache to avoid re-downloading on each build
       - model_cache:/root/.cache/huggingface
@@ -36,20 +37,18 @@ services:
       - STORAGE_TYPE=local # Change to 's3' for AWS deployment
 
       # Local storage path (used when STORAGE_TYPE=local)
-      - DATA_PATH=/data
+      - DATA_PATH=/app/cg-production-data
+      - THUMBNAIL_PATH=/app/cg-production-data-thumbnails
 
       # S3 configuration (used when STORAGE_TYPE=s3)
-      # - ASSET_BUCKET_NAME=your-asset-bucket-name
-      # - S3_PREFIX=production-files/
-      # - THUMBNAIL_BUCKET_NAME=your-thumbnail-bucket-name
+      # - ASSET_BUCKET_NAME=cg-production-data
+      # - THUMBNAIL_BUCKET_NAME=cg-production-data-thumbnails
+      # - S3_PREFIX=
       # - AWS_REGION=us-east-1
       # Note: AWS credentials should be provided via IAM roles in AWS Batch
 
       # Database configuration - PostgreSQL with pgvector
-      - DATABASE_URL=postgresql://cguser:cgpass@postgres:5432/cg_metadata
-
-      # For SQLite (legacy), use:
-      # - DATABASE_URL=sqlite:///./db/metadata.db
+      - DATABASE_URL=postgresql://cguser:cgpass@postgres:5432/cg-metadata-db
 
       # Logging
       - LOG_LEVEL=INFO

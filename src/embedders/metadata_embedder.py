@@ -87,14 +87,14 @@ class MetadataEmbedder:
         file_type = metadata.get('file_type')
         
         if file_type == 'image':
-            if metadata.get('width') and metadata.get('height'):
-                parts.append(f"Resolution: {metadata['width']}x{metadata['height']}")
+            if metadata.get('resolution_x') and metadata.get('resolution_y'):
+                parts.append(f"Resolution: {metadata['resolution_x']}x{metadata['resolution_y']}")
             if metadata.get('mode'):
                 parts.append(f"Color mode: {metadata['mode']}")
         
         elif file_type == 'video':
-            if metadata.get('width') and metadata.get('height'):
-                parts.append(f"Resolution: {metadata['width']}x{metadata['height']}")
+            if metadata.get('resolution_x') and metadata.get('resolution_y'):
+                parts.append(f"Resolution: {metadata['resolution_x']}x{metadata['resolution_y']}")
             if metadata.get('duration'):
                 duration = metadata['duration']
                 parts.append(f"Duration: {duration:.1f} seconds")

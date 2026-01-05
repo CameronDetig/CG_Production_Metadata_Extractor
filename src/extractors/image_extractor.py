@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from PIL import Image
 from datetime import datetime
-from .thumbnail_utils import create_image_thumbnail
+from .utils.thumbnail_utils import create_image_thumbnail
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -32,8 +32,8 @@ def _extract_kra_metadata(file_path):
                     colorspacename = image_elem.get('colorspacename', 'Unknown')
                     
                     return {
-                        'width': int(width) if width else None,
-                        'height': int(height) if height else None,
+                        'resolution_x': int(width) if width else None,
+                        'resolution_y': int(height) if height else None,
                         'mode': colorspacename
                     }
                 else:
@@ -84,20 +84,55 @@ def extract_image_metadata(file_path):
                 # If extraction returned an error, mark as not extractable
                 if 'error' in kra_data:
                     metadata['extractable'] = False
+        
+        # Special handling for .svg files (vector graphics)
+        elif metadata['extension'] == '.svg':
+            # SVG files are XML-based vector graphics, not raster images
+            # We can extract viewBox dimensions if present
+            try:
+                import xml.etree.ElementTree as ET
+                tree = ET.parse(file_path)
+                root = tree.getroot()
+                
+                # Try to get dimensions from viewBox or width/height attributes
+                viewbox = root.get('viewBox')
+                if viewbox:
+                    # viewBox format: "min-x min-y width height"
+                    parts = viewbox.split()
+                    if len(parts) == 4:
+                        metadata['resolution_x'] = int(float(parts[2]))
+                        metadata['resolution_y'] = int(float(parts[3]))
+                else:
+                    # Try width/height attributes
+                    width = root.get('width')
+                    height = root.get('height')
+                    if width and height:
+                        # Remove units (px, pt, etc.) and convert to int
+                        metadata['resolution_x'] = int(float(width.rstrip('pxPXptPT')))
+                        metadata['resolution_y'] = int(float(height.rstrip('pxPXptPT')))
+                
+                metadata['mode'] = 'SVG (vector)'
+            except Exception as e:
+                logger.warning(f"Could not extract SVG dimensions from {file_path}: {e}")
+                metadata['mode'] = 'SVG (vector)'
+                # Don't set resolution for SVG if we can't extract it
+        
         else:
-            # Try to open with PIL for standard image formats
+            # Try to open with PIL for standard image formats (PNG, JPG, TIFF, EXR, WebP, etc.)
             with Image.open(file_path) as img:
-                metadata['width'] = img.width
-                metadata['height'] = img.height
+                metadata['resolution_x'] = img.width
+                metadata['resolution_y'] = img.height
                 metadata['mode'] = img.mode
         
         # Generate thumbnail (for all image types)
         if 'error' not in metadata:
-            import tempfile
-            temp_dir = tempfile.mkdtemp(prefix='image_thumb_')
+            # Use configurable thumbnail directory (defaults to ./cg-production-data-thumbnails)
+            thumbnail_base_path = os.getenv('THUMBNAIL_PATH', './cg-production-data-thumbnails')
+            thumbnail_base = Path(thumbnail_base_path) / 'image'
+            thumbnail_base.mkdir(parents=True, exist_ok=True)
             
             base_name = file_path_obj.stem
-            thumbnail_path = Path(temp_dir) / f"{base_name}_thumb.jpg"
+            thumbnail_path = thumbnail_base / f"{base_name}_thumb.jpg"
             
             if create_image_thumbnail(file_path, str(thumbnail_path)):
                 metadata['thumbnail_path'] = str(thumbnail_path)

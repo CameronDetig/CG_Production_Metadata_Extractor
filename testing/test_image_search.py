@@ -7,8 +7,9 @@ import sys
 from pathlib import Path
 
 # Add parent directory to path
+# Add src directory to path
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, parent_dir)
+sys.path.insert(0, os.path.join(parent_dir, 'src'))
 
 from database import MetadataDatabase
 from embedders.clip_embedder import CLIPEmbedder
@@ -28,7 +29,7 @@ def search_images_by_text(text_prompt, top_k=10):
     print("=" * 80)
     
     # Initialize database
-    database_url = os.getenv('DATABASE_URL', 'postgresql://cguser:cgpass@localhost:5432/cg_metadata')
+    database_url = os.getenv('DATABASE_URL', 'postgresql://cguser:cgpass@localhost:5432/cg-metadata-db')
     db = MetadataDatabase(database_url)
     
     # Initialize embedder
@@ -56,27 +57,16 @@ def search_images_by_text(text_prompt, top_k=10):
         file_path = result.get('file_path', 'Unknown')
         file_name = Path(file_path).name
         file_size = result.get('file_size', 0)
+        file_type = result.get('file_type', 'unknown')
         
-        # Parse metadata_json to get image-specific details
-        import json
-        metadata_json = result.get('metadata_json', '{}')
-        metadata = {}
-        if isinstance(metadata_json, str):
-            try:
-                metadata = json.loads(metadata_json)
-            except:
-                pass
-        else:
-            metadata = metadata_json or {}
-        
-        width = metadata.get('width', 'N/A')
-        height = metadata.get('height', 'N/A')
-        format_type = metadata.get('format', 'N/A')
+        # Get resolution from direct fields (new schema)
+        resolution_x = result.get('resolution_x', 'N/A')
+        resolution_y = result.get('resolution_y', 'N/A')
         
         print(f"{i}. {file_name}")
         print(f"   Path: {file_path}")
-        print(f"   Dimensions: {width}x{height}")
-        print(f"   Format: {format_type}")
+        print(f"   Type: {file_type}")
+        print(f"   Dimensions: {resolution_x}x{resolution_y}")
         print(f"   Size: {file_size / 1024:.2f} KB")
         print()
     

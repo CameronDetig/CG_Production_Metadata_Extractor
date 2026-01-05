@@ -5,8 +5,8 @@ Run this to ensure the database is working correctly before scanning
 import os
 import sys
 
-# Add parent directory to path so we can import database
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add src directory to path so we can import database
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
 
 from database import MetadataDatabase, PGVECTOR_AVAILABLE
 
@@ -25,7 +25,7 @@ def test_database_connection():
         return False
     
     # Get database URL from environment
-    database_url = os.getenv('DATABASE_URL', 'postgresql://cguser:cgpass@localhost:5432/cg_metadata')
+    database_url = os.getenv('DATABASE_URL', 'postgresql://cguser:cgpass@localhost:5432/cg-metadata-db')
     print(f"\n2. Database URL: {database_url}")
     
     # Test connection

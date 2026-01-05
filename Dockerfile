@@ -40,6 +40,7 @@ RUN mkdir -p /app/db
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/src
 
 # Default command
-CMD ["python3", "scanner.py"]
+CMD ["python3", "src/scanner.py"]

@@ -1,5 +1,6 @@
 .venv
-data/
+cg-production-data/
+cg-production-data-thumbnails/
 .env
 db/
 postgres_data/

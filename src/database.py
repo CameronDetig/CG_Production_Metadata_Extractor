@@ -5,7 +5,7 @@ Supports both SQLite (local development) and PostgreSQL with pgvector (AWS RDS)
 import os
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey, Index, JSON, event, text
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, Index, JSON, event, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
 from sqlalchemy.pool import NullPool, QueuePool
@@ -24,15 +24,31 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 
-def _serialize_for_json(obj: Any) -> Any:
-    """Convert datetime objects to ISO format strings for JSON serialization"""
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    elif isinstance(obj, dict):
-        return {key: _serialize_for_json(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [_serialize_for_json(item) for item in obj]
-    return obj
+
+
+
+class Show(Base):
+    """Show/Production metadata table"""
+    __tablename__ = 'shows'
+    
+    # Primary key - matches the show name extracted from file paths
+    name = Column(String(255), primary_key=True)
+    
+    # Production metadata
+    release_date = Column(DateTime, nullable=True)
+    description = Column(Text, nullable=True)
+    director = Column(String(255), nullable=True)
+    blender_version = Column(String(20), nullable=True)  # Primary Blender version used
+    
+    # Lists stored as JSON
+    characters = Column(JSON, nullable=True)  # List of character names
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship to files
+    files = relationship("File", back_populates="show_info")
 
 
 class File(Base):
@@ -48,17 +64,22 @@ class File(Base):
     created_date = Column(DateTime)
     modified_date = Column(DateTime)
     scan_date = Column(DateTime, nullable=False, default=datetime.utcnow)
-    metadata_json = Column(JSON)
+    show = Column(String(255), ForeignKey('shows.name'), index=True)  # Show name extracted from path
+    version_number = Column(Integer)  # Version number extracted from filename
     error = Column(Text)
     
     # Vector embedding for metadata semantic search (384 dimensions)
     metadata_embedding = Column(Vector(384) if PGVECTOR_AVAILABLE else Text)
     
     # Relationships
+    show_info = relationship("Show", back_populates="files")
     image = relationship("Image", back_populates="file", uselist=False, cascade="all, delete-orphan")
     video = relationship("Video", back_populates="file", uselist=False, cascade="all, delete-orphan")
     blend_file = relationship("BlendFile", back_populates="file", uselist=False, cascade="all, delete-orphan")
-    text_file = relationship("TextFile", back_populates="file", uselist=False, cascade="all, delete-orphan")
+    audio = relationship("Audio", back_populates="file", uselist=False, cascade="all, delete-orphan")
+    code = relationship("Code", back_populates="file", uselist=False, cascade="all, delete-orphan")
+    spreadsheet = relationship("Spreadsheet", back_populates="file", uselist=False, cascade="all, delete-orphan")
+    document = relationship("Document", back_populates="file", uselist=False, cascade="all, delete-orphan")
     unknown_file = relationship("UnknownFile", back_populates="file", uselist=False, cascade="all, delete-orphan")
 
 
@@ -68,8 +89,8 @@ class Image(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
-    width = Column(Integer)
-    height = Column(Integer)
+    resolution_x = Column(Integer)
+    resolution_y = Column(Integer)
     mode = Column(String(50))
     thumbnail_path = Column(String(1024))  # Path to 512x512 JPG thumbnail
     
@@ -85,8 +106,8 @@ class Video(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
-    width = Column(Integer)
-    height = Column(Integer)
+    resolution_x = Column(Integer)
+    resolution_y = Column(Integer)
     duration = Column(Float)
     fps = Column(Float)
     codec = Column(String(100))
@@ -105,6 +126,7 @@ class BlendFile(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    blender_version = Column(String(20))  # e.g., \"4.0.2\"
     num_frames = Column(Integer)
     fps = Column(Integer)
     render_engine = Column(String(100))
@@ -114,7 +136,6 @@ class BlendFile(Base):
     meshes = Column(Integer)
     cameras = Column(Integer)
     lights = Column(Integer)
-    empties = Column(Integer)
     thumbnail_path = Column(String(1024))  # Path to 512x512 JPG viewport render
     
     # Vector embedding for visual similarity search (512 dimensions)
@@ -123,14 +144,75 @@ class BlendFile(Base):
     file = relationship("File", back_populates="blend_file")
 
 
-class TextFile(Base):
-    """Text file-specific metadata"""
-    __tablename__ = 'text_files'
+class Audio(Base):
+    """Audio file-specific metadata"""
+    __tablename__ = 'audio'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
     
-    file = relationship("File", back_populates="text_file")
+    # Audio properties
+    duration = Column(Float)  # seconds
+    bitrate = Column(Integer)  # bits per second
+    sample_rate = Column(Integer)  # Hz (e.g., 44100, 48000)
+    channels = Column(Integer)  # 1=mono, 2=stereo, etc.
+    codec = Column(String(50))  # mp3, flac, aac, etc.
+    
+    file = relationship("File", back_populates="audio")
+
+
+class Code(Base):
+    """Code file-specific metadata"""
+    __tablename__ = 'code'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    
+    # Code properties
+    language = Column(String(50))  # python, cpp, javascript, etc.
+    num_lines = Column(Integer)  # total lines in file
+    
+    # File properties
+    encoding = Column(String(50))  # utf-8, ascii, etc.
+    has_shebang = Column(Boolean)  # #!/usr/bin/env python
+    
+    file = relationship("File", back_populates="code")
+
+
+class Spreadsheet(Base):
+    """Spreadsheet file-specific metadata"""
+    __tablename__ = 'spreadsheets'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    
+    # Spreadsheet properties
+    num_sheets = Column(Integer)  # number of sheets/tabs
+    sheet_names = Column(JSON)  # list of sheet names
+    total_rows = Column(Integer)  # total rows across all sheets
+    total_columns = Column(Integer)  # max columns
+    
+    # For CSV files (single sheet)
+    num_rows = Column(Integer)  # rows in CSV
+    num_columns = Column(Integer)  # columns in CSV
+    has_header = Column(Boolean)  # detected header row
+    
+    file = relationship("File", back_populates="spreadsheet")
+
+
+class Document(Base):
+    """Document file-specific metadata (formerly TextFile)"""
+    __tablename__ = 'documents'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    
+    # Document properties
+    doc_type = Column(String(50))  # txt, pdf, docx, odt, md, etc.
+    page_count = Column(Integer)  # for PDF, ODT, DOCX
+    word_count = Column(Integer)  # approximate
+    
+    file = relationship("File", back_populates="document")
 
 
 class UnknownFile(Base):
@@ -251,6 +333,16 @@ class MetadataDatabase:
         session = self.get_session()
         
         try:
+            # Ensure show exists if provided (to prevent foreign key violations)
+            show_name = metadata.get('show')
+            if show_name:
+                existing_show = session.query(Show).filter_by(name=show_name).first()
+                if not existing_show:
+                    logger.info(f"Creating new show record: {show_name}")
+                    new_show = Show(name=show_name)
+                    session.add(new_show)
+                    session.flush()
+
             # Check if file already exists
             existing_file = session.query(File).filter_by(
                 file_path=metadata.get('file_path')
@@ -266,7 +358,8 @@ class MetadataDatabase:
                 file_record.created_date = metadata.get('created_date')
                 file_record.modified_date = metadata.get('modified_date')
                 file_record.scan_date = datetime.utcnow()
-                file_record.metadata_json = _serialize_for_json(metadata)
+                file_record.show = metadata.get('show')
+                file_record.version_number = metadata.get('version_number')
                 file_record.error = metadata.get('error')
                 # Update metadata embedding if provided
                 if metadata.get('metadata_embedding'):
@@ -282,7 +375,8 @@ class MetadataDatabase:
                     created_date=metadata.get('created_date'),
                     modified_date=metadata.get('modified_date'),
                     scan_date=datetime.utcnow(),
-                    metadata_json=_serialize_for_json(metadata),
+                    show=metadata.get('show'),
+                    version_number=metadata.get('version_number'),
                     error=metadata.get('error'),
                     metadata_embedding=metadata.get('metadata_embedding')
                 )
@@ -301,6 +395,7 @@ class MetadataDatabase:
                 
                 blend_record = BlendFile(
                     file_id=file_id,
+                    blender_version=metadata.get('blender_version'),
                     num_frames=metadata.get('num_frames'),
                     fps=metadata.get('fps'),
                     render_engine=metadata.get('engine'),
@@ -310,7 +405,6 @@ class MetadataDatabase:
                     meshes=metadata.get('meshes'),
                     cameras=metadata.get('cameras'),
                     lights=metadata.get('lights'),
-                    empties=metadata.get('empties'),
                     thumbnail_path=metadata.get('thumbnail_path'),
                     visual_embedding=metadata.get('visual_embedding')
                 )
@@ -323,8 +417,8 @@ class MetadataDatabase:
                 
                 image_record = Image(
                     file_id=file_id,
-                    width=metadata.get('width'),
-                    height=metadata.get('height'),
+                    resolution_x=metadata.get('resolution_x'),
+                    resolution_y=metadata.get('resolution_y'),
                     mode=metadata.get('mode'),
                     thumbnail_path=metadata.get('thumbnail_path'),
                     visual_embedding=metadata.get('visual_embedding')
@@ -338,8 +432,8 @@ class MetadataDatabase:
                 
                 video_record = Video(
                     file_id=file_id,
-                    width=metadata.get('width'),
-                    height=metadata.get('height'),
+                    resolution_x=metadata.get('resolution_x'),
+                    resolution_y=metadata.get('resolution_y'),
                     duration=metadata.get('duration'),
                     fps=metadata.get('fps'),
                     codec=metadata.get('codec'),
@@ -349,15 +443,64 @@ class MetadataDatabase:
                 )
                 session.add(video_record)
             
-            elif metadata.get('file_type') == 'text':
-                # Delete existing text record if updating
-                if existing_file and file_record.text_file:
-                    session.delete(file_record.text_file)
+            elif metadata.get('file_type') == 'audio':
+                # Delete existing audio record if updating
+                if existing_file and file_record.audio:
+                    session.delete(file_record.audio)
                 
-                text_record = TextFile(
-                    file_id=file_id
+                audio_record = Audio(
+                    file_id=file_id,
+                    duration=metadata.get('duration'),
+                    bitrate=metadata.get('bitrate'),
+                    sample_rate=metadata.get('sample_rate'),
+                    channels=metadata.get('channels'),
+                    codec=metadata.get('codec')
                 )
-                session.add(text_record)
+                session.add(audio_record)
+            
+            elif metadata.get('file_type') == 'code':
+                # Delete existing code record if updating
+                if existing_file and file_record.code:
+                    session.delete(file_record.code)
+                
+                code_record = Code(
+                    file_id=file_id,
+                    language=metadata.get('language'),
+                    num_lines=metadata.get('num_lines'),
+                    encoding=metadata.get('encoding'),
+                    has_shebang=metadata.get('has_shebang')
+                )
+                session.add(code_record)
+            
+            elif metadata.get('file_type') == 'spreadsheet':
+                # Delete existing spreadsheet record if updating
+                if existing_file and file_record.spreadsheet:
+                    session.delete(file_record.spreadsheet)
+                
+                spreadsheet_record = Spreadsheet(
+                    file_id=file_id,
+                    num_sheets=metadata.get('num_sheets'),
+                    sheet_names=metadata.get('sheet_names'),
+                    total_rows=metadata.get('total_rows'),
+                    total_columns=metadata.get('total_columns'),
+                    num_rows=metadata.get('num_rows'),
+                    num_columns=metadata.get('num_columns'),
+                    has_header=metadata.get('has_header')
+                )
+                session.add(spreadsheet_record)
+            
+            elif metadata.get('file_type') == 'document':
+                # Delete existing document record if updating
+                if existing_file and file_record.document:
+                    session.delete(file_record.document)
+                
+                document_record = Document(
+                    file_id=file_id,
+                    doc_type=metadata.get('doc_type'),
+                    page_count=metadata.get('page_count'),
+                    word_count=metadata.get('word_count')
+                )
+                session.add(document_record)
 
             elif metadata.get('file_type') == 'other':
                 # Delete existing unknown record if updating
@@ -398,7 +541,8 @@ class MetadataDatabase:
                     'created_date': file_record.created_date,
                     'modified_date': file_record.modified_date,
                     'scan_date': file_record.scan_date,
-                    'metadata_json': file_record.metadata_json,
+                    'show': file_record.show,
+                    'version_number': file_record.version_number,
                     'error': file_record.error
                 }
             return None
@@ -429,7 +573,8 @@ class MetadataDatabase:
                 'created_date': f.created_date,
                 'modified_date': f.modified_date,
                 'scan_date': f.scan_date,
-                'metadata_json': f.metadata_json,
+                'show': f.show,
+                'version_number': f.version_number,
                 'error': f.error
             } for f in files]
         finally:
@@ -507,7 +652,8 @@ class MetadataDatabase:
                 'extension': f.extension,
                 'created_date': f.created_date,
                 'modified_date': f.modified_date,
-                'metadata_json': f.metadata_json
+                'show': f.show,
+                'version_number': f.version_number
             } for f in files]
         finally:
             session.close()
@@ -546,8 +692,8 @@ class MetadataDatabase:
                         'file_name': file.file_name,
                         'file_path': file.file_path,
                         'file_type': 'image',
-                        'width': img.width,
-                        'height': img.height,
+                        'resolution_x': img.resolution_x,
+                        'resolution_y': img.resolution_y,
                         'thumbnail_path': img.thumbnail_path,
                         'metadata_json': file.metadata_json
                     })
@@ -564,8 +710,8 @@ class MetadataDatabase:
                         'file_name': file.file_name,
                         'file_path': file.file_path,
                         'file_type': 'video',
-                        'width': vid.width,
-                        'height': vid.height,
+                        'resolution_x': vid.resolution_x,
+                        'resolution_y': vid.resolution_y,
                         'duration': vid.duration,
                         'thumbnail_path': vid.thumbnail_path,
                         'metadata_json': file.metadata_json
@@ -583,6 +729,7 @@ class MetadataDatabase:
                         'file_name': file.file_name,
                         'file_path': file.file_path,
                         'file_type': 'blend',
+                        'blender_version': blend.blender_version,
                         'resolution_x': blend.resolution_x,
                         'resolution_y': blend.resolution_y,
                         'thumbnail_path': blend.thumbnail_path,
@@ -593,5 +740,194 @@ class MetadataDatabase:
             # Note: This is a simplified approach; for better performance,
             # you might want to use UNION queries with proper ordering
             return results[:limit]
+        finally:
+            session.close()
+
+    
+    # ==================== Show Management Methods ====================
+    
+    def add_show(self, show_data: Dict[str, Any]) -> None:
+        """
+        Add or update a show record
+        
+        Args:
+            show_data: Dictionary containing show metadata
+                Required: 'name'
+                Optional: 'release_date', 'description', 'director', 
+                         'blender_version', 'characters'
+        """
+        session = self.get_session()
+        
+        try:
+            show_name = show_data.get('name')
+            if not show_name:
+                raise ValueError("Show name is required")
+            
+            # Check if show already exists
+            existing_show = session.query(Show).filter_by(name=show_name).first()
+            
+            if existing_show:
+                # Update existing show
+                if show_data.get('release_date'):
+                    existing_show.release_date = show_data['release_date']
+                if show_data.get('description'):
+                    existing_show.description = show_data['description']
+                if show_data.get('director'):
+                    existing_show.director = show_data['director']
+                if show_data.get('blender_version'):
+                    existing_show.blender_version = show_data['blender_version']
+                if show_data.get('characters'):
+                    existing_show.characters = show_data['characters']
+                existing_show.updated_at = datetime.utcnow()
+            else:
+                # Create new show
+                show_record = Show(
+                    name=show_name,
+                    release_date=show_data.get('release_date'),
+                    description=show_data.get('description'),
+                    director=show_data.get('director'),
+                    blender_version=show_data.get('blender_version'),
+                    characters=show_data.get('characters')
+                )
+                session.add(show_record)
+            
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+    
+    def get_show(self, show_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve show metadata by name
+        
+        Args:
+            show_name: Name of the show
+            
+        Returns:
+            Dictionary containing show metadata, or None if not found
+        """
+        session = self.get_session()
+        
+        try:
+            show_record = session.query(Show).filter_by(name=show_name).first()
+            
+            if show_record:
+                return {
+                    'name': show_record.name,
+                    'release_date': show_record.release_date,
+                    'description': show_record.description,
+                    'director': show_record.director,
+                    'blender_version': show_record.blender_version,
+                    'characters': show_record.characters,
+                    'created_at': show_record.created_at,
+                    'updated_at': show_record.updated_at
+                }
+            return None
+        finally:
+            session.close()
+    
+    def get_all_shows(self) -> List[Dict[str, Any]]:
+        """
+        Retrieve all shows
+        
+        Returns:
+            List of dictionaries containing show metadata
+        """
+        session = self.get_session()
+        
+        try:
+            shows = session.query(Show).all()
+            
+            return [{
+                'name': s.name,
+                'release_date': s.release_date,
+                'description': s.description,
+                'director': s.director,
+                'blender_version': s.blender_version,
+                'characters': s.characters,
+                'created_at': s.created_at,
+                'updated_at': s.updated_at
+            } for s in shows]
+        finally:
+            session.close()
+    
+    def get_files_by_show(self, show_name: str, include_show_info: bool = True) -> List[Dict[str, Any]]:
+        """
+        Get all files for a specific show
+        
+        Args:
+            show_name: Name of the show
+            include_show_info: If True, include show metadata in results
+            
+        Returns:
+            List of files with optional show metadata
+        """
+        session = self.get_session()
+        
+        try:
+            files = session.query(File).filter_by(show=show_name).all()
+            
+            result = []
+            for f in files:
+                file_data = {
+                    'id': f.id,
+                    'file_name': f.file_name,
+                    'file_path': f.file_path,
+                    'file_type': f.file_type,
+                    'file_size': f.file_size,
+                    'extension': f.extension,
+                    'created_date': f.created_date,
+                    'modified_date': f.modified_date,
+                    'scan_date': f.scan_date,
+                    'show': f.show,
+                    'version_number': f.version_number,
+                    'error': f.error
+                }
+                
+                # Include show metadata if requested and available
+                if include_show_info and f.show_info:
+                    file_data['show_info'] = {
+                        'name': f.show_info.name,
+                        'release_date': f.show_info.release_date,
+                        'description': f.show_info.description,
+                        'director': f.show_info.director,
+                        'blender_version': f.show_info.blender_version,
+                        'characters': f.show_info.characters
+                    }
+                
+                result.append(file_data)
+            
+            return result
+        finally:
+            session.close()
+    
+    def delete_show(self, show_name: str) -> bool:
+        """
+        Delete a show record
+        
+        Note: This does NOT delete files, only the show metadata.
+        Files will still have their show name, but no show metadata.
+        
+        Args:
+            show_name: Name of the show to delete
+            
+        Returns:
+            True if show was deleted, False if not found
+        """
+        session = self.get_session()
+        
+        try:
+            show_record = session.query(Show).filter_by(name=show_name).first()
+            
+            if show_record:
+                session.delete(show_record)
+                session.commit()
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            raise e
         finally:
             session.close()

@@ -8,14 +8,23 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Any
 import sys
+from dotenv import load_dotenv
+from datetime import datetime
+
+# Load environment variables
+load_dotenv()
 
 from database import MetadataDatabase
-from storage_adapter import create_storage_adapter
+from storage_adapter import create_storage_adapter, LocalStorageAdapter
 from extractors.image_extractor import extract_image_metadata
 from extractors.video_extractor import extract_video_metadata
 from extractors.blend_extractor import extract_blend_metadata
-from extractors.text_extractor import extract_text_metadata
+from extractors.audio_extractor import extract_audio_metadata
+from extractors.code_extractor import extract_code_metadata
+from extractors.spreadsheet_extractor import extract_spreadsheet_metadata
+from extractors.document_extractor import extract_document_metadata
 from extractors.unknown_extractor import extract_unknown_metadata
+from extractors.utils.metadata_utils import extract_show_from_path, extract_version_number
 from embedders import MetadataEmbedder, CLIPEmbedder
 from PIL import Image
 
@@ -29,10 +38,20 @@ logger = logging.getLogger(__name__)
 
 
 # File extension mappings
-IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.gif', '.kra', '.psd'}
+# File extension mappings
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.gif', '.kra', '.psd', '.exr', '.svg', '.webp'}
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv'}
-TEXT_EXTENSIONS = {'.txt', '.pdf', '.doc', '.docx'}
 BLEND_EXTENSIONS = {'.blend'}
+AUDIO_EXTENSIONS = {'.mp3', '.flac', '.wav', '.ogg', '.m4a', '.aac', '.wma', '.opus'}
+CODE_EXTENSIONS = {
+    '.py', '.sh', '.bat', '.ps1',
+    '.cpp', '.c', '.h', '.hpp', '.rs', '.go', '.java', '.cs',
+    '.html', '.css', '.js', '.ts', '.jsx', '.tsx', '.vue',
+    '.glsl', '.hlsl', '.vert', '.frag', '.shader',
+    '.json', '.yaml', '.yml', '.toml', '.ini', '.xml'
+}
+SPREADSHEET_EXTENSIONS = {'.csv', '.xlsx', '.xls', '.ods', '.tsv'}
+DOCUMENT_EXTENSIONS = {'.txt', '.pdf', '.doc', '.docx', '.odt', '.odp', '.odg', '.rtf', '.md'}
 
 
 class FileScanner:
@@ -52,8 +71,11 @@ class FileScanner:
             'scanned': 0,
             'images': 0,
             'videos': 0,
-            'text_files': 0,
             'blend_files': 0,
+            'audio_files': 0,
+            'code_files': 0,
+            'spreadsheet_files': 0,
+            'documents': 0,
             'other_files': 0,
             'errors': 0,
             'skipped': 0,
@@ -115,9 +137,21 @@ class FileScanner:
                 metadata = self._process_with_storage(file_path, extract_blend_metadata, 'blend')
                 self.stats['blend_files'] += 1
                 
-            elif file_ext in TEXT_EXTENSIONS:
-                metadata = self._process_with_storage(file_path, extract_text_metadata, 'text')
-                self.stats['text_files'] += 1
+            elif file_ext in AUDIO_EXTENSIONS:
+                metadata = self._process_with_storage(file_path, extract_audio_metadata, 'audio')
+                self.stats['audio_files'] += 1
+                
+            elif file_ext in CODE_EXTENSIONS:
+                metadata = self._process_with_storage(file_path, extract_code_metadata, 'code')
+                self.stats['code_files'] += 1
+                
+            elif file_ext in SPREADSHEET_EXTENSIONS:
+                metadata = self._process_with_storage(file_path, extract_spreadsheet_metadata, 'spreadsheet')
+                self.stats['spreadsheet_files'] += 1
+                
+            elif file_ext in DOCUMENT_EXTENSIONS:
+                metadata = self._process_with_storage(file_path, extract_document_metadata, 'document')
+                self.stats['documents'] += 1
                 
             else:
                 metadata = self._process_with_storage(file_path, extract_unknown_metadata, 'other')
@@ -128,6 +162,10 @@ class FileScanner:
 
             # Store in database
             if metadata:
+                # Extract show and version_number from path/filename
+                metadata['show'] = extract_show_from_path(file_path)
+                metadata['version_number'] = extract_version_number(metadata.get('file_name', ''))
+                
                 # Generate embeddings if enabled
                 if not self.skip_embeddings:
                     self._generate_embeddings(metadata)
@@ -167,6 +205,18 @@ class FileScanner:
                 metadata['file_path'] = file_path
                 # Safety enforcement to make sure the type matches what the scanner decided it was 
                 metadata['file_type'] = file_type
+                
+                # Populate standard fields if missing
+                if 'file_name' not in metadata:
+                    metadata['file_name'] = os.path.basename(file_path)
+                if 'file_size' not in metadata and os.path.exists(local_path):
+                     metadata['file_size'] = os.path.getsize(local_path)
+                if 'extension' not in metadata:
+                    metadata['extension'] = Path(file_path).suffix.lower()
+                if 'created_date' not in metadata and os.path.exists(local_path):
+                    metadata['created_date'] = datetime.fromtimestamp(os.path.getctime(local_path))
+                if 'modified_date' not in metadata and os.path.exists(local_path):
+                    metadata['modified_date'] = datetime.fromtimestamp(os.path.getmtime(local_path))
                 
                 # Upload thumbnail to S3 if it exists (when using S3 storage)
                 thumbnail_path = metadata.get('thumbnail_path')
@@ -239,8 +289,12 @@ class FileScanner:
         
         finally:
             # Clean up temporary thumbnail after embeddings are generated
+            # Only cleanup if we're NOT using local storage (i.e. if we uploaded to S3)
+            # For local storage, we want to keep the file!
             local_thumbnail = metadata.get('_local_thumbnail_path')
-            if local_thumbnail and os.path.exists(local_thumbnail):
+            should_cleanup = not isinstance(self.storage, LocalStorageAdapter)
+            
+            if should_cleanup and local_thumbnail and os.path.exists(local_thumbnail):
                 try:
                     temp_dir = Path(local_thumbnail).parent
                     os.remove(local_thumbnail)
@@ -270,8 +324,11 @@ class FileScanner:
         logger.info(f"Total files scanned: {self.stats['scanned']}")
         logger.info(f"  - Images: {self.stats['images']}")
         logger.info(f"  - Videos: {self.stats['videos']}")
-        logger.info(f"  - Text files: {self.stats['text_files']}")
         logger.info(f"  - Blend files: {self.stats['blend_files']}")
+        logger.info(f"  - Audio files: {self.stats['audio_files']}")
+        logger.info(f"  - Code files: {self.stats['code_files']}")
+        logger.info(f"  - Spreadsheets: {self.stats['spreadsheet_files']}")
+        logger.info(f"  - Documents: {self.stats['documents']}")
         logger.info(f"  - Other files: {self.stats['other_files']}")
         logger.info(f"Errors: {self.stats['errors']}")
         logger.info(f"Skipped: {self.stats['skipped']}")
