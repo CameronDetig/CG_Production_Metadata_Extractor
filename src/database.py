@@ -126,7 +126,7 @@ class BlendFile(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
-    blender_version = Column(String(20))  # e.g., \"4.0.2\"
+    blender_version = Column(String(20))  # e.g., \"4.0.2\" or \"2.49\" (from header)
     num_frames = Column(Integer)
     fps = Column(Integer)
     render_engine = Column(String(100))
@@ -477,8 +477,6 @@ class MetadataDatabase:
                     file_id=file_id,
                     num_sheets=metadata.get('num_sheets'),
                     sheet_names=metadata.get('sheet_names'),
-                    total_rows=metadata.get('total_rows'),
-                    total_columns=metadata.get('total_columns'),
                     num_rows=metadata.get('num_rows'),
                     num_columns=metadata.get('num_columns'),
                     has_header=metadata.get('has_header')

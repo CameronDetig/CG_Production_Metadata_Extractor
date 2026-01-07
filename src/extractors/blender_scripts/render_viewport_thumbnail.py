@@ -97,9 +97,28 @@ def render_viewport_thumbnail(output_path):
         }
         
         # Render using OpenGL (viewport render)
+        # API changed in Blender 4.5+: use temp_override context manager instead of override parameter
         print("DEBUG: Starting OpenGL render (this may take a while)...", flush=True)
-        bpy.ops.render.opengl(override, write_still=True)
-        print("DEBUG: OpenGL render completed", flush=True)
+        
+        # Detect Blender version to use appropriate API
+        blender_version = bpy.app.version  # Tuple like (4, 5, 5)
+        major_minor = float(f"{blender_version[0]}.{blender_version[1]}")
+        
+        try:
+            if major_minor >= 4.5:
+                # Blender 4.5+ uses temp_override context manager
+                print(f"DEBUG: Using Blender 4.5+ API (version {major_minor})", flush=True)
+                with bpy.context.temp_override(**override):
+                    bpy.ops.render.opengl(write_still=True)
+            else:
+                # Blender 2.x - 4.2 uses direct override parameter
+                print(f"DEBUG: Using legacy API (version {major_minor})", flush=True)
+                bpy.ops.render.opengl(override, write_still=True)
+            
+            print("DEBUG: OpenGL render completed", flush=True)
+        except Exception as render_error:
+            print(f"THUMBNAIL_RENDER_ERROR: {render_error}", flush=True)
+            raise
         
         # Verify file was created
         if os.path.exists(output_path):

@@ -1,6 +1,6 @@
 """
 Image metadata extractor
-Supports: PNG, JPG, JPEG, TIFF, KRA (Krita), SVG, ODG (LibreOffice Draw), etc.
+Supports: PNG, JPG, JPEG, TIFF, KRA (Krita), SVG, ODG (LibreOffice Draw), EXR, etc.
 """
 import os
 import zipfile
@@ -13,6 +13,15 @@ from .utils.thumbnail_utils import create_image_thumbnail
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
+# Try to import OpenEXR for EXR file support
+try:
+    import OpenEXR
+    import Imath
+    OPENEXR_AVAILABLE = True
+except ImportError:
+    OPENEXR_AVAILABLE = False
+    logger.warning("OpenEXR not available - EXR files will not be processed")
 
 
 def _extract_kra_metadata(file_path):
@@ -56,6 +65,37 @@ def _extract_kra_metadata(file_path):
     except Exception as e:
         error_msg = f"Unexpected error: {str(e)}"
         logger.error(f"KRA extraction failed for {file_path}: {error_msg}")
+        return {'error': error_msg}
+
+
+def _extract_exr_metadata(file_path):
+    """Extract metadata from OpenEXR files"""
+    if not OPENEXR_AVAILABLE:
+        return {'error': 'OpenEXR library not available'}
+    
+    try:
+        exr_file = OpenEXR.InputFile(file_path)
+        
+        # Get the header
+        header = exr_file.header()
+        
+        # Get dimensions from data window
+        dw = header['dataWindow']
+        width = dw.max.x - dw.min.x + 1
+        height = dw.max.y - dw.min.y + 1
+        
+        # Get channel information
+        channels = header['channels'].keys()
+        channel_str = ', '.join(channels)
+        
+        return {
+            'resolution_x': width,
+            'resolution_y': height,
+            'mode': f'EXR ({channel_str})'
+        }
+    except Exception as e:
+        error_msg = f"Failed to read EXR file: {str(e)}"
+        logger.error(f"EXR extraction failed for {file_path}: {error_msg}")
         return {'error': error_msg}
 
 
@@ -123,8 +163,17 @@ def extract_image_metadata(file_path):
             metadata['mode'] = 'ODG (vector)'
             # We could extract metadata from zipped content.xml in future if needed
         
+        # Special handling for .exr files (OpenEXR HDR images)
+        elif metadata['extension'] == '.exr':
+            exr_data = _extract_exr_metadata(file_path)
+            if exr_data:
+                metadata.update(exr_data)
+                # If extraction returned an error, mark as not extractable
+                if 'error' in exr_data:
+                    metadata['extractable'] = False
+        
         else:
-            # Try to open with PIL for standard image formats (PNG, JPG, TIFF, EXR, WebP, etc.)
+            # Try to open with PIL for standard image formats (PNG, JPG, TIFF, WebP, etc.)
             with Image.open(file_path) as img:
                 metadata['resolution_x'] = img.width
                 metadata['resolution_y'] = img.height

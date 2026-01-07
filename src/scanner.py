@@ -105,6 +105,8 @@ class FileScanner:
         try:
             files = self.storage.list_files()
             logger.info(f"Found {len(files)} files to process")
+            logger.info("=" * 50)
+            logger.info("")  # Empty line for spacing
         except Exception as e:
             logger.error(f"Failed to list files: {str(e)}")
             return

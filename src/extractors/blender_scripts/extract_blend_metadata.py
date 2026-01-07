@@ -9,7 +9,7 @@ import json
 def extract_blend_metadata():
     """Extract metadata from the currently open Blender file"""
     blend_data = {
-        'blender_version': None,
+        # Note: blender_version extracted from file header, not from bpy.app.version
         'num_frames': None,
         'fps': None,
         'engine': None,
@@ -24,9 +24,6 @@ def extract_blend_metadata():
         'thumbnail_rendered': False,
         'thumbnail_skipped': False
     }
-    
-    # Blender version (e.g., "4.0.2" from tuple (4, 0, 2))
-    blend_data['blender_version'] = ".".join(map(str, bpy.app.version))
     
     # Scene information
     scene = bpy.context.scene

@@ -4,6 +4,13 @@ This script is executed by Blender and coordinates metadata extraction and thumb
 """
 import sys
 import json
+import os
+
+# Add the script's directory to sys.path so we can import our modules
+# This is needed because Blender's Python might not respect PYTHONPATH
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
 
 # Import the extraction and rendering functions
 from extract_blend_metadata import extract_blend_metadata

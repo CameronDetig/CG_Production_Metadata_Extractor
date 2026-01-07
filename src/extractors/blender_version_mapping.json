@@ -1,0 +1,13 @@
+{
+    "version_mapping": {
+        "all": {
+            "file_version_range": [
+                "0.00",
+                "99.99"
+            ],
+            "blender_executable": "/opt/blender-4.5.5-linux-x64/blender",
+            "notes": "Default: Blender 4.5.5 LTS for all files (will refine ranges based on testing)"
+        }
+    },
+    "default_version": "/opt/blender-4.5.5-linux-x64/blender"
+}

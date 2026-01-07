@@ -1,9 +1,4 @@
-# Data directories - these are mounted as volumes, not copied into image
-data/
-output/
-db/
-
-# Python cache
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -12,6 +7,10 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# production data
+cg-production-data/
+cg-production-data-thumbnails/
 
 # Virtual environments
 venv/
@@ -23,35 +22,27 @@ ENV/
 .idea/
 *.swp
 *.swo
-*~
 
 # Git
 .git/
 .gitignore
 
-# Docker
-Dockerfile
-docker-compose.yml
-.dockerignore
+# Database (will be created in container)
+db/
+*.db
 
 # Documentation
-README.md
 docs/
 *.md
+README.md
 
-# Test files
+# Tests
 tests/
 test_*.py
-*_test.py
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
 # Logs
 *.log
-logs/
-
-# Environment files (these should be set via environment variables)
-.env
-.env.*
