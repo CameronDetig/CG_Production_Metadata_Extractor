@@ -1,4 +1,5 @@
 .venv
+.vscode/
 cg-production-data/
 cg-production-data-thumbnails/
 .env
