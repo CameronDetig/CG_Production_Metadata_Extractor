@@ -104,7 +104,8 @@ def create_video_thumbnail(video_path: str, output_path: str, size: int = 512, q
             output_path
         ]
         
-        result = subprocess.run(extract_cmd, capture_output=True, text=True, timeout=30)
+        # Keep video thumbnail attempts short to avoid long hangs on troublesome files
+        result = subprocess.run(extract_cmd, capture_output=True, text=True, timeout=15)
         
         if result.returncode != 0:
             logger.error(f"Could not extract video frame: {result.stderr}")

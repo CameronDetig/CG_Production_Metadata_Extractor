@@ -10,6 +10,7 @@ from pathlib import Path
 from PIL import Image
 from datetime import datetime
 from .utils.thumbnail_utils import create_image_thumbnail
+from .utils.metadata_utils import extract_show_from_path
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -183,7 +184,12 @@ def extract_image_metadata(file_path):
         if 'error' not in metadata:
             # Use configurable thumbnail directory (defaults to ./cg-production-data-thumbnails)
             thumbnail_base_path = os.getenv('THUMBNAIL_PATH', './cg-production-data-thumbnails')
-            thumbnail_base = Path(thumbnail_base_path) / 'image'
+            
+            # Determine show folder
+            show_name = extract_show_from_path(file_path)
+            show_folder = f"shows/{show_name}" if show_name else 'other'
+            
+            thumbnail_base = Path(thumbnail_base_path) / show_folder / 'image'
             thumbnail_base.mkdir(parents=True, exist_ok=True)
             
             base_name = file_path_obj.stem

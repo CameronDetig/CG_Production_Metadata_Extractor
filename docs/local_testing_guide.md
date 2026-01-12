@@ -23,24 +23,22 @@ THUMBNAIL_PATH=./cg-production-data-thumbnails
 # Note: DATABASE_URL in .env is ignored by Docker (it uses docker-compose values automatically)
 ```
 
-### 3. Build the Container
-Whenever you change code, rebuild the container:
-```bash
-docker-compose build
-```
+### 3. Build and Run
 
-### 4. Start the Database
-Start the persistent database container in the background:
-```bash
-docker-compose up -d postgres
-```
-
-### 5. Run the Scanner
-Run the scanner inside the container. It will see your code changes if you rebuild, or you can mount volume if configured (currently code is baked in).
+Whenever you change code, rebuild and run the scanner:
 
 ```bash
+# Rebuild the metadata-extractor image (faster than rebuilding everything)
+docker-compose build metadata-extractor
+
+# Run the scanner (postgres will auto-start as a dependency)
 docker-compose run --rm metadata-extractor python src/scanner.py
 ```
+
+> **Tip**: You can skip embedding generation for faster testing with:
+> ```bash
+> docker-compose run --rm metadata-extractor python src/scanner.py --skip-embeddings
+> ```
 
 ### 6. Stopping & Resetting
 

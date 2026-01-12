@@ -201,6 +201,12 @@ Modify `src/scanner.py` to add:
 - Process large files separately
 - Increase container resources
 
+### Blender Version Handling
+- Version selection is driven by `src/extractors/blender_version_mapping.json`.
+- Included binaries in the image: `2.49b` (2.0–2.59), `2.79b` (2.60–2.79), `4.5.5` (default for 4.x and fallback). Optional bridge paths for `2.83` and `3.6` are honored if you place those builds under `/opt`.
+- The scanner tries the best-match executable; missing binaries are skipped; the default is always attempted last.
+- Headless runs force X11 with `XDG_SESSION_TYPE=x11` and `XDG_RUNTIME_DIR=/tmp` to avoid Wayland crashes when rendering thumbnails.
+
 ### Permission Issues
 ```bash
 # Fix volume permissions

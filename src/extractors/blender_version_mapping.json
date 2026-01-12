@@ -1,12 +1,44 @@
 {
     "version_mapping": {
-        "all": {
+        "legacy-2.4x": {
             "file_version_range": [
-                "0.00",
-                "99.99"
+                "2.00",
+                "2.49"
+            ],
+            "blender_executable": "/opt/blender-2.49b-linux-glibc236-py26-x86_64/blender",
+            "notes": "Very old files (<2.60) — Blender 2.49b with Python 2.6"
+        },
+        "legacy-2.5-2.7x": {
+            "file_version_range": [
+                "2.50",
+                "2.79"
+            ],
+            "blender_executable": "/opt/blender-2.79b-linux-glibc219-x86_64/blender",
+            "notes": "2.6x–2.79 era (Sintel, Tears of Steel, Caminandes, Agent 327)"
+        },
+        "bridge-2.80-2.92": {
+            "file_version_range": [
+                "2.80",
+                "2.83"
+            ],
+            "blender_executable": "/opt/blender-2.83.20-linux-x64/blender",
+            "notes": "Collections/Eevee era; optional bridge if installed, else falls back"
+        },
+        "bridge-3.x": {
+            "file_version_range": [
+                "2.84",
+                "3.60"
+            ],
+            "blender_executable": "/opt/blender-3.6.9-linux-x64/blender",
+            "notes": "3.x era; optional bridge if installed, else falls back"
+        },
+        "modern-4.x": {
+            "file_version_range": [
+                "3.61",
+                "4.55"
             ],
             "blender_executable": "/opt/blender-4.5.5-linux-x64/blender",
-            "notes": "Default: Blender 4.5.5 LTS for all files (will refine ranges based on testing)"
+            "notes": "Current default for 4.x and as global fallback"
         }
     },
     "default_version": "/opt/blender-4.5.5-linux-x64/blender"

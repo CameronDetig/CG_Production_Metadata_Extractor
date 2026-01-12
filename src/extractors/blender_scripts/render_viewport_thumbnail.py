@@ -22,21 +22,17 @@ def render_viewport_thumbnail(output_path):
         scene.render.image_settings.quality = 85
         scene.render.filepath = output_path
         
-        # Ensure a camera exists
+        
+        # Check if there's an existing camera to use
         print("DEBUG: Checking for camera", flush=True)
+        has_camera = False
         if not scene.camera:
-            # Check if any cameras exist in the scene
             cameras = [o for o in bpy.data.objects if o.type == 'CAMERA']
             if cameras:
                 scene.camera = cameras[0]
-            else:
-                # Create a default camera
-                cam_data = bpy.data.cameras.new("TempCamera")
-                cam_obj = bpy.data.objects.new("TempCamera", cam_data)
-                scene.collection.objects.link(cam_obj)
-                scene.camera = cam_obj
-                cam_obj.location = (7, -7, 5)
-                cam_obj.rotation_euler = (1.1, 0, 0.785)
+                has_camera = True
+        else:
+            has_camera = True
         
         # Use window manager to get proper context for OpenGL rendering
         # If no VIEW_3D exists, convert the first area to VIEW_3D
@@ -75,6 +71,12 @@ def render_viewport_thumbnail(output_path):
             space.overlay.show_overlays = False
         if hasattr(space, 'show_gizmo'):
             space.show_gizmo = False
+            
+        # Force Workbench/SOLID shading to avoid Eevee/Cycles compilation
+        # This ensures we strictly use OpenGL viewport rendering as requested
+        if hasattr(space, 'shading'):
+            space.shading.type = 'SOLID'
+            space.shading.color_type = 'MATERIAL'
         
         # Find the WINDOW region
         region = None
@@ -97,7 +99,6 @@ def render_viewport_thumbnail(output_path):
         }
         
         # Render using OpenGL (viewport render)
-        # API changed in Blender 4.5+: use temp_override context manager instead of override parameter
         print("DEBUG: Starting OpenGL render (this may take a while)...", flush=True)
         
         # Detect Blender version to use appropriate API
@@ -109,10 +110,23 @@ def render_viewport_thumbnail(output_path):
                 # Blender 4.5+ uses temp_override context manager
                 print(f"DEBUG: Using Blender 4.5+ API (version {major_minor})", flush=True)
                 with bpy.context.temp_override(**override):
+                    # If there's a camera, render through it; otherwise just render the viewport
+                    if has_camera:
+                        bpy.ops.view3d.view_camera()
+                    
+                    # Render
                     bpy.ops.render.opengl(write_still=True)
             else:
                 # Blender 2.x - 4.2 uses direct override parameter
                 print(f"DEBUG: Using legacy API (version {major_minor})", flush=True)
+                
+                # If there's a camera, render through it; otherwise just render the viewport
+                if has_camera:
+                    try:
+                        bpy.ops.view3d.view_camera(override)
+                    except:
+                        pass
+
                 bpy.ops.render.opengl(override, write_still=True)
             
             print("DEBUG: OpenGL render completed", flush=True)

@@ -19,6 +19,7 @@ services:
 
   metadata-extractor:
     build: .
+    shm_size: 2gb
     container_name: cg_metadata_extractor
     depends_on:
       postgres:

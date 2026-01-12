@@ -51,7 +51,7 @@ class StorageAdapter(ABC):
         pass
     
     @abstractmethod
-    def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str) -> str:
+    def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str, show_name: Optional[str] = None) -> str:
         """
         Upload thumbnail to storage
         
@@ -106,7 +106,7 @@ class LocalStorageAdapter(StorageAdapter):
         """Check if file exists locally"""
         return os.path.exists(file_path)
     
-    def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str) -> str:
+    def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str, show_name: Optional[str] = None) -> str:
         """
         For local storage, thumbnails are already in the correct location
         Just return the path
@@ -243,7 +243,7 @@ class S3StorageAdapter(StorageAdapter):
         except:
             return False
     
-    def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str) -> str:
+    def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str, show_name: Optional[str] = None) -> str:
         """
         Upload thumbnail to S3 thumbnail bucket
         
@@ -255,8 +255,9 @@ class S3StorageAdapter(StorageAdapter):
         Returns:
             S3 URI to uploaded thumbnail
         """
-        # Construct S3 key (blend, video, image)
-        key = f"{file_type}/{filename}"
+        # Construct S3 key (shows/show_name/file_type/filename or other/file_type/filename)
+        folder = f"shows/{show_name}" if show_name else 'other'
+        key = f"{folder}/{file_type}/{filename}"
         
         try:
             # Upload without ACL (modern buckets have ACLs disabled)

@@ -235,10 +235,13 @@ class FileScanner:
                         thumbnail_filename = f"{original_filename}_thumb.jpg"
                         
                         # Upload thumbnail and get S3 URI
+                        # Pass show name to ensure organized structure in S3
+                        show_name = metadata.get('show')
                         s3_thumbnail_uri = self.storage.upload_thumbnail(
                             thumbnail_path, 
                             file_type, 
-                            thumbnail_filename
+                            thumbnail_filename,
+                            show_name=show_name
                         )
                         
                         # Update metadata with S3 URI (or keep local path if no upload)

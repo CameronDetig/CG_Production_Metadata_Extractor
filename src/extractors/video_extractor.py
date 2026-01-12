@@ -9,6 +9,7 @@ import json
 import logging
 from datetime import datetime
 from .utils.thumbnail_utils import create_video_thumbnail
+from .utils.metadata_utils import extract_show_from_path
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,12 @@ def extract_video_metadata(file_path):
             if 'error' not in metadata and metadata.get('duration', 0) > 0:
                 # Use configurable thumbnail directory (defaults to ./cg-production-data-thumbnails)
                 thumbnail_base_path = os.getenv('THUMBNAIL_PATH', './cg-production-data-thumbnails')
-                thumbnail_base = Path(thumbnail_base_path) / 'video'
+                
+                # Determine show folder
+                show_name = extract_show_from_path(file_path)
+                show_folder = f"shows/{show_name}" if show_name else 'other'
+                
+                thumbnail_base = Path(thumbnail_base_path) / show_folder / 'video'
                 thumbnail_base.mkdir(parents=True, exist_ok=True)
                 
                 base_name = file_path_obj.stem
