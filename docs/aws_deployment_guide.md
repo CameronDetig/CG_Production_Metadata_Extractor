@@ -265,7 +265,7 @@ This will allows the batch process access to the s3 container with the files.
    - Execution role: `CGMetadataExtractorRole`
    - Image: `<account-id>.dkr.ecr.us-east-1.amazonaws.com/cg-metadata-extractor:latest`
    - vCPUs: 2
-   - Memory: 4 GB
+   - Memory: 16 GB
    - Add Environment variables:
      ```
      STORAGE_TYPE=s3

@@ -62,12 +62,7 @@ RUN wget -q https://download.blender.org/release/Blender2.79/blender-2.79b-linux
     && tar -xf blender-2.79b-linux-glibc219-x86_64.tar.bz2 -C /opt \
     && rm blender-2.79b-linux-glibc219-x86_64.tar.bz2
 
-# Download and install Blender 2.83 LTS (bridge for 2.80–2.92)
-RUN wget -q https://download.blender.org/release/Blender2.83/blender-2.83.20-linux-x64.tar.xz \
-    && tar -xf blender-2.83.20-linux-x64.tar.xz -C /opt \
-    && rm blender-2.83.20-linux-x64.tar.xz
-
-# Download and install Blender 3.6 LTS (bridge for 3.x era)
+# Download and install Blender 3.6 LTS (bridge for 2.80+ and 3.x era)
 RUN wget -q https://download.blender.org/release/Blender3.6/blender-3.6.9-linux-x64.tar.xz \
     && tar -xf blender-3.6.9-linux-x64.tar.xz -C /opt \
     && rm blender-3.6.9-linux-x64.tar.xz

@@ -68,7 +68,6 @@ def get_blender_candidates(file_version: Optional[str]) -> List[Dict[str, str]]:
     preferred_order = [
         'modern-4.x',
         'bridge-3.x', 
-        'bridge-2.80-2.92',
         'legacy-2.5-2.7x',
         'legacy-2.4x',
     ]
@@ -327,7 +326,6 @@ def extract_blend_metadata(file_path):
                 per_version_timeout = {
                     'legacy-2.4x': 90,
                     'legacy-2.5-2.7x': 90,
-                    'bridge-2.80-2.92': 120,
                     'bridge-3.x': 120,
                     'modern-4.x': 180,
                 }

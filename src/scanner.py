@@ -164,8 +164,7 @@ class FileScanner:
 
             # Store in database
             if metadata:
-                # Extract show and version_number from path/filename
-                metadata['show'] = extract_show_from_path(file_path)
+                # Extract version_number from filename (show is already extracted in _process_with_storage)
                 metadata['version_number'] = extract_version_number(metadata.get('file_name', ''))
                 
                 # Generate embeddings if enabled
@@ -207,6 +206,9 @@ class FileScanner:
                 metadata['file_path'] = file_path
                 # Safety enforcement to make sure the type matches what the scanner decided it was 
                 metadata['file_type'] = file_type
+                
+                # Extract show name EARLY so it's available for thumbnail upload
+                metadata['show'] = extract_show_from_path(file_path)
                 
                 # Populate standard fields if missing
                 if 'file_name' not in metadata:

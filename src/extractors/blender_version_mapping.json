@@ -16,29 +16,21 @@
             "blender_executable": "/opt/blender-2.79b-linux-glibc219-x86_64/blender",
             "notes": "2.6x–2.79 era (Sintel, Tears of Steel, Caminandes, Agent 327)"
         },
-        "bridge-2.80-2.92": {
-            "file_version_range": [
-                "2.80",
-                "2.83"
-            ],
-            "blender_executable": "/opt/blender-2.83.20-linux-x64/blender",
-            "notes": "Collections/Eevee era; optional bridge if installed, else falls back"
-        },
         "bridge-3.x": {
             "file_version_range": [
-                "2.84",
-                "3.60"
+                "2.80",
+                "3.69"
             ],
             "blender_executable": "/opt/blender-3.6.9-linux-x64/blender",
-            "notes": "3.x era; optional bridge if installed, else falls back"
+            "notes": "2.80+ and 3.x era — Blender 3.6.9 LTS"
         },
         "modern-4.x": {
             "file_version_range": [
-                "3.61",
+                "3.70",
                 "4.55"
             ],
             "blender_executable": "/opt/blender-4.5.5-linux-x64/blender",
-            "notes": "Current default for 4.x and as global fallback"
+            "notes": "4.x era and global fallback — Blender 4.5.5"
         }
     },
     "default_version": "/opt/blender-4.5.5-linux-x64/blender"
