@@ -204,15 +204,16 @@ class FileScanner:
             # Ensure file_path in metadata is the original path (not temp path)
             if metadata:
                 metadata['file_path'] = file_path
+                # CRITICAL: Set file_name from original path, not temp path
+                # This prevents storing temp download names like "s3_download__xyz.blend"
+                metadata['file_name'] = os.path.basename(file_path)
                 # Safety enforcement to make sure the type matches what the scanner decided it was 
                 metadata['file_type'] = file_type
                 
                 # Extract show name EARLY so it's available for thumbnail upload
                 metadata['show'] = extract_show_from_path(file_path)
                 
-                # Populate standard fields if missing
-                if 'file_name' not in metadata:
-                    metadata['file_name'] = os.path.basename(file_path)
+                # Populate other standard fields if missing
                 if 'file_size' not in metadata and os.path.exists(local_path):
                      metadata['file_size'] = os.path.getsize(local_path)
                 if 'extension' not in metadata:
@@ -255,6 +256,7 @@ class FileScanner:
                         # Keep the local path in metadata for embeddings
             
             return metadata
+
         # Temp file automatically cleaned up here for S3
     
     def _generate_embeddings(self, metadata: Dict[str, Any]):
