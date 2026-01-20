@@ -16,6 +16,9 @@
 
 set -e
 
+# Disable AWS CLI pager to prevent script from stalling on long output
+export AWS_PAGER=""
+
 # Get script directory and load .env if it exists
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/../.env"
@@ -117,7 +120,8 @@ aws ecr get-login-password --region "$REGION" | docker login --username AWS --pa
 # Build the Docker image
 echo ""
 echo "Building Docker image..."
-docker build -t "$REPO_NAME:$TAG" .
+docker build --pull=false -t "$REPO_NAME:$TAG" .   
+# The --pull=false flag prevents Docker from trying to pull the latest ubuntu image and instead used the cached version
 
 # Tag for ECR (versioned tag)
 echo ""

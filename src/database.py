@@ -67,6 +67,7 @@ class File(Base):
     show = Column(String(255), ForeignKey('shows.name'), index=True)  # Show name extracted from path
     version_number = Column(Integer)  # Version number extracted from filename
     error = Column(Text)
+    tags = Column(JSON, nullable=True)  # List of classification tags, e.g., ["normal_map", "grayscale"]
     
     # Vector embedding for metadata semantic search (384 dimensions)
     metadata_embedding = Column(Vector(384) if PGVECTOR_AVAILABLE else Text)
@@ -357,6 +358,12 @@ class MetadataDatabase:
                 file_record.show = metadata.get('show')
                 file_record.version_number = metadata.get('version_number')
                 file_record.error = metadata.get('error')
+                # Merge tags (append new tags to existing, avoiding duplicates)
+                new_tags = metadata.get('tags', [])
+                if new_tags:
+                    existing_tags = file_record.tags or []
+                    merged_tags = list(set(existing_tags + new_tags))
+                    file_record.tags = merged_tags
                 # Update metadata embedding if provided
                 if metadata.get('metadata_embedding'):
                     file_record.metadata_embedding = metadata['metadata_embedding']
@@ -374,6 +381,7 @@ class MetadataDatabase:
                     show=metadata.get('show'),
                     version_number=metadata.get('version_number'),
                     error=metadata.get('error'),
+                    tags=metadata.get('tags'),
                     metadata_embedding=metadata.get('metadata_embedding')
                 )
                 session.add(file_record)
@@ -537,7 +545,8 @@ class MetadataDatabase:
                     'scan_date': file_record.scan_date,
                     'show': file_record.show,
                     'version_number': file_record.version_number,
-                    'error': file_record.error
+                    'error': file_record.error,
+                    'tags': file_record.tags
                 }
             return None
         finally:
@@ -569,7 +578,8 @@ class MetadataDatabase:
                 'scan_date': f.scan_date,
                 'show': f.show,
                 'version_number': f.version_number,
-                'error': f.error
+                'error': f.error,
+                'tags': f.tags
             } for f in files]
         finally:
             session.close()

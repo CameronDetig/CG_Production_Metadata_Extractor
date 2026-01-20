@@ -16,7 +16,7 @@ load_dotenv()
 
 from database import MetadataDatabase
 from storage_adapter import create_storage_adapter, LocalStorageAdapter
-from extractors.image_extractor import extract_image_metadata
+from extractors.image_extractor import extract_image_metadata, detect_texture_tags
 from extractors.video_extractor import extract_video_metadata
 from extractors.blend_extractor import extract_blend_metadata
 from extractors.audio_extractor import extract_audio_metadata
@@ -209,6 +209,13 @@ class FileScanner:
                 metadata['file_name'] = os.path.basename(file_path)
                 # Safety enforcement to make sure the type matches what the scanner decided it was 
                 metadata['file_type'] = file_type
+                
+                # Detect texture type tags for images using the ORIGINAL filename (not temp path)
+                # This must happen after file_name is set to use the correct S3 key
+                if file_type == 'image':
+                    tags = detect_texture_tags(file_path, metadata.get('mode'))
+                    if tags:
+                        metadata['tags'] = tags
                 
                 # Extract show name EARLY so it's available for thumbnail upload
                 metadata['show'] = extract_show_from_path(file_path)

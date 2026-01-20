@@ -25,6 +25,64 @@ except ImportError:
     logger.warning("OpenEXR not available - EXR files will not be processed")
 
 
+# Texture type patterns: (regex pattern, tag name)
+# Patterns match both _ and - separators before the texture type keyword
+import re
+
+TEXTURE_PATTERNS = [
+    # Normal maps
+    (r'[-_](normal|nrm)(?:[-_]|\.)', 'normal_map'),
+    # Diffuse/Albedo/Base color maps
+    (r'[-_](diffuse|albedo|basecolor|base[-_]?color|diff|col)(?:[-_]|\.)', 'diffuse_map'),
+    # Specular maps
+    (r'[-_](specular|spec)(?:[-_]|\.)', 'specular_map'),
+    # Roughness maps
+    (r'[-_](roughness|rough)(?:[-_]|\.)', 'roughness_map'),
+    # Metallic maps
+    (r'[-_](metallic|metal)(?:[-_]|\.)', 'metallic_map'),
+    # Ambient Occlusion maps
+    (r'[-_](ao|occlusion|ambient[-_]?occlusion)(?:[-_]|\.)', 'ao_map'),
+    # Displacement/Height maps
+    (r'[-_](height|disp|displacement)(?:[-_]|\.)', 'displacement_map'),
+    # Bump maps
+    (r'[-_]bump(?:[-_]|\.)', 'bump_map'),
+    # Emission maps
+    (r'[-_](emission|emissive)(?:[-_]|\.)', 'emission_map'),
+    # Opacity/Alpha/Mask maps
+    (r'[-_](opacity|alpha|mask)(?:[-_]|\.)', 'opacity_map'),
+]
+
+# PIL modes that indicate grayscale/single-channel images
+GRAYSCALE_MODES = {'L', 'LA', '1', 'I', 'F', 'P'}
+
+
+def detect_texture_tags(file_path: str, mode: str = None) -> list:
+    """
+    Detect texture map type and other properties from filename and image mode.
+    
+    Args:
+        file_path: Path to the image file
+        mode: PIL image mode (e.g., 'RGB', 'L', 'RGBA')
+        
+    Returns:
+        List of detected tags, e.g., ['normal_map', 'grayscale']
+    """
+    tags = []
+    filename = os.path.basename(file_path).lower()
+    
+    # Check filename against texture patterns
+    for pattern, tag in TEXTURE_PATTERNS:
+        if re.search(pattern, filename, re.IGNORECASE):
+            tags.append(tag)
+            break  # Only match one texture type per file
+    
+    # Check for grayscale mode
+    if mode and mode in GRAYSCALE_MODES:
+        tags.append('grayscale')
+    
+    return tags
+
+
 def _extract_kra_metadata(file_path):
     """Extract metadata from Krita .kra files (ZIP archives with XML)"""
     try:
@@ -202,6 +260,7 @@ def extract_image_metadata(file_path):
                 metadata['thumbnail_path'] = str(thumbnail_path)
             else:
                 logger.warning(f"Could not create thumbnail for {file_path}")
+            
             
     except Exception as e:
         metadata['error'] = str(e)
