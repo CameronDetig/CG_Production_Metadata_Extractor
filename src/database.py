@@ -525,6 +525,23 @@ class MetadataDatabase:
     
 
 
+    def get_all_file_paths(self) -> set:
+        """
+        Return a set of all file paths in the database for efficient lookup.
+        
+        This is optimized for checking file existence during scanning,
+        returning only paths (not full metadata) for memory efficiency.
+        
+        Returns:
+            Set of file paths currently in the database
+        """
+        session = self.get_session()
+        try:
+            paths = session.query(File.file_path).all()
+            return {p[0] for p in paths}
+        finally:
+            session.close()
+    
     def get_file_by_path(self, file_path: str) -> Optional[Dict[str, Any]]:
         """Retrieve file metadata by path"""
         session = self.get_session()

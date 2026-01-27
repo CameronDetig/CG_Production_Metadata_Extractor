@@ -300,6 +300,14 @@ This will allows the batch process access to the s3 container with the files.
                       # use the password you made earlier for the database
      DATABASE_URL=postgresql://postgres:<your-db-password>@<your-database-write-endpoint>:5432/postgres
      LOG_LEVEL=INFO
+
+                      # Resume support: skip files already in database (useful if job crashes partway through)
+                      # Set to 'false' to resume, 'true' to re-process everything (default)
+     OVERRIDE_EXISTING=true
+
+                      # Parallel processing: number of workers for non-.blend files (default: 4)
+                      # .blend files are always processed sequentially to avoid memory issues
+     SCANNER_WORKERS=4
      ```
 
 > [!WARNING]

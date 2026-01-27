@@ -176,6 +176,8 @@ Environment variables (see `.env.example` for full details):
 
 ### Application
 - `LOG_LEVEL`: Logging verbosity (INFO, DEBUG, WARNING, ERROR)
+- `OVERRIDE_EXISTING`: When `true` (default), re-process all files. When `false`, skip files already in database (useful for resuming crashed scans).
+- `SCANNER_WORKERS`: Number of parallel workers for processing non-.blend files (default: `4`). Blend files are always processed sequentially to avoid memory issues.
 
 ## Extending the Scanner
 

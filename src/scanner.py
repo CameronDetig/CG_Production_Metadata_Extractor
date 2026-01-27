@@ -10,6 +10,8 @@ from typing import List, Dict, Any
 import sys
 from dotenv import load_dotenv
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 # Load environment variables
 load_dotenv()
@@ -53,9 +55,13 @@ CODE_EXTENSIONS = {
 SPREADSHEET_EXTENSIONS = {'.csv', '.xlsx', '.xls', '.ods', '.tsv'}
 DOCUMENT_EXTENSIONS = {'.txt', '.pdf', '.doc', '.docx', '.odt', '.odp', '.rtf', '.md'}
 
+# Memory-heavy file types that should be processed sequentially (not in parallel)
+# .blend files can use 8-15GB RAM each when Blender processes them
+SEQUENTIAL_EXTENSIONS = BLEND_EXTENSIONS
+
 
 class FileScanner:
-    def __init__(self, storage_adapter, database, skip_embeddings=False):
+    def __init__(self, storage_adapter, database, skip_embeddings=False, override_existing=True):
         """
         Initialize file scanner
         
@@ -63,10 +69,18 @@ class FileScanner:
             storage_adapter: StorageAdapter instance (local or S3)
             database: MetadataDatabase instance
             skip_embeddings: If True, skip embedding generation (faster for development)
+            override_existing: If False, skip files already in database (useful for resuming crashed scans)
         """
         self.storage = storage_adapter
         self.db = database
         self.skip_embeddings = skip_embeddings
+        self.override_existing = override_existing
+        self.existing_paths = set()  # Populated in scan() if override_existing is False
+        
+        # Thread pool configuration
+        self.max_workers = int(os.getenv('SCANNER_WORKERS', '4'))
+        self.stats_lock = threading.Lock()  # Protect stats from concurrent updates
+        
         self.stats = {
             'scanned': 0,
             'images': 0,
@@ -100,6 +114,13 @@ class FileScanner:
     def scan(self):
         """Scan all files in the storage"""
         logger.info(f"Starting scan using {self.storage.__class__.__name__}")
+        logger.info(f"Parallel workers: {self.max_workers} (for non-.blend files)")
+        
+        # If not overriding existing files, pre-fetch all existing paths for efficient lookup
+        if not self.override_existing:
+            logger.info("OVERRIDE_EXISTING=false - Loading existing file paths from database...")
+            self.existing_paths = self.db.get_all_file_paths()
+            logger.info(f"Found {len(self.existing_paths)} files already in database (will skip these)")
         
         # Get list of all files
         try:
@@ -111,11 +132,68 @@ class FileScanner:
             logger.error(f"Failed to list files: {str(e)}")
             return
         
-        # Process each file
+        # Split files into parallel-safe and sequential (memory-heavy) groups
+        parallel_files = []
+        sequential_files = []
+        
         for file_path in files:
-            self.process_file(file_path)
+            # Skip files already in database if override_existing is False
+            if not self.override_existing and file_path in self.existing_paths:
+                with self.stats_lock:
+                    self.stats['skipped'] += 1
+                logger.debug(f"Skipping (already in database): {file_path}")
+                continue
+            
+            ext = Path(file_path).suffix.lower()
+            if ext in SEQUENTIAL_EXTENSIONS:
+                sequential_files.append(file_path)
+            else:
+                parallel_files.append(file_path)
+        
+        logger.info(f"Processing {len(parallel_files)} files in parallel ({self.max_workers} workers), "
+                    f"{len(sequential_files)} .blend files sequentially")
+        
+        # Process parallel-safe files with thread pool
+        if parallel_files:
+            self._process_parallel(parallel_files)
+        
+        # Process memory-heavy .blend files sequentially
+        if sequential_files:
+            logger.info(f"Starting sequential processing of {len(sequential_files)} .blend files...")
+            for file_path in sequential_files:
+                self.process_file(file_path)
         
         self.print_summary()
+    
+    def _process_parallel(self, files: List[str]):
+        """
+        Process files using a thread pool for parallel execution.
+        
+        Args:
+            files: List of file paths to process in parallel
+        """
+        logger.info(f"Starting parallel processing with {self.max_workers} workers...")
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submit all files to the thread pool
+            futures = {executor.submit(self.process_file, f): f for f in files}
+            
+            # Process results as they complete
+            completed = 0
+            total = len(files)
+            for future in as_completed(futures):
+                file_path = futures[future]
+                completed += 1
+                try:
+                    future.result()  # Raises exception if process_file failed
+                except Exception as e:
+                    logger.error(f"Worker failed on {file_path}: {e}")
+                
+                # Log progress every 100 files
+                if completed % 100 == 0:
+                    logger.info(f"Parallel progress: {completed}/{total} files processed")
+        
+        logger.info(f"Parallel processing complete: {total} files processed")
     
     def process_file(self, file_path: str):
         """Process a single file"""
@@ -129,35 +207,43 @@ class FileScanner:
             
             if file_ext in IMAGE_EXTENSIONS:
                 metadata = self._process_with_storage(file_path, extract_image_metadata, 'image')
-                self.stats['images'] += 1
+                with self.stats_lock:
+                    self.stats['images'] += 1
                 
             elif file_ext in VIDEO_EXTENSIONS:
                 metadata = self._process_with_storage(file_path, extract_video_metadata, 'video')
-                self.stats['videos'] += 1
+                with self.stats_lock:
+                    self.stats['videos'] += 1
                 
             elif file_ext in BLEND_EXTENSIONS:
                 metadata = self._process_with_storage(file_path, extract_blend_metadata, 'blend')
-                self.stats['blend_files'] += 1
+                with self.stats_lock:
+                    self.stats['blend_files'] += 1
                 
             elif file_ext in AUDIO_EXTENSIONS:
                 metadata = self._process_with_storage(file_path, extract_audio_metadata, 'audio')
-                self.stats['audio_files'] += 1
+                with self.stats_lock:
+                    self.stats['audio_files'] += 1
                 
             elif file_ext in CODE_EXTENSIONS:
                 metadata = self._process_with_storage(file_path, extract_code_metadata, 'code')
-                self.stats['code_files'] += 1
+                with self.stats_lock:
+                    self.stats['code_files'] += 1
                 
             elif file_ext in SPREADSHEET_EXTENSIONS:
                 metadata = self._process_with_storage(file_path, extract_spreadsheet_metadata, 'spreadsheet')
-                self.stats['spreadsheet_files'] += 1
+                with self.stats_lock:
+                    self.stats['spreadsheet_files'] += 1
                 
             elif file_ext in DOCUMENT_EXTENSIONS:
                 metadata = self._process_with_storage(file_path, extract_document_metadata, 'document')
-                self.stats['documents'] += 1
+                with self.stats_lock:
+                    self.stats['documents'] += 1
                 
             else:
                 metadata = self._process_with_storage(file_path, extract_unknown_metadata, 'other')
-                self.stats['other_files'] += 1
+                with self.stats_lock:
+                    self.stats['other_files'] += 1
             
             
             # logger.info(f"Debug Metadata: {metadata}")
@@ -172,15 +258,18 @@ class FileScanner:
                     self._generate_embeddings(metadata)
                 
                 self.db.insert_metadata(metadata)
-                self.stats['scanned'] += 1
+                with self.stats_lock:
+                    self.stats['scanned'] += 1
                 
                 if 'error' in metadata:
                     logger.warning(f"Error extracting metadata from {file_path}: {metadata['error']}")
-                    self.stats['errors'] += 1
+                    with self.stats_lock:
+                        self.stats['errors'] += 1
                     
         except Exception as e:
             logger.error(f"Failed to process {file_path}: {str(e)}")
-            self.stats['errors'] += 1
+            with self.stats_lock:
+                self.stats['errors'] += 1
     
 
     def _process_with_storage(self, file_path: str, extractor_func, file_type: str) -> Dict[str, Any]:
@@ -278,7 +367,8 @@ class FileScanner:
             if self.metadata_embedder:
                 metadata_embedding = self.metadata_embedder.embed_metadata(metadata)
                 metadata['metadata_embedding'] = metadata_embedding
-                self.stats['embeddings_generated'] += 1
+                with self.stats_lock:
+                    self.stats['embeddings_generated'] += 1
             
             # Generate visual embedding for images, videos, and blend files
             file_type = metadata.get('file_type')
@@ -380,6 +470,8 @@ def main():
     storage_type = os.getenv('STORAGE_TYPE', 'local').lower()
     database_url = os.getenv('DATABASE_URL', 'sqlite:///./db/metadata.db')
     log_level = os.getenv('LOG_LEVEL', 'INFO')
+    # OVERRIDE_EXISTING: if false, skip files already in database (useful for resuming)
+    override_existing = os.getenv('OVERRIDE_EXISTING', 'true').lower() in ('true', '1', 'yes')
     
     # Set log level
     logging.getLogger().setLevel(getattr(logging, log_level))
@@ -390,6 +482,7 @@ def main():
     logger.info(f"Storage Type: {storage_type}")
     logger.info(f"Database: {database_url[:100]}...")  # Truncate for security
     logger.info(f"Embeddings: {'DISABLED' if args.skip_embeddings else 'ENABLED'}")
+    logger.info(f"Override Existing: {override_existing} (skip existing files: {not override_existing})")
     logger.info(f"Python version: {sys.version}")
     logger.info(f"Working directory: {os.getcwd()}")
     
@@ -417,7 +510,7 @@ def main():
         
         # Create scanner and run
         logger.info("Starting file scan...")
-        scanner = FileScanner(storage, db, skip_embeddings=args.skip_embeddings)
+        scanner = FileScanner(storage, db, skip_embeddings=args.skip_embeddings, override_existing=override_existing)
         scanner.scan()
         
         logger.info("Scan complete!")

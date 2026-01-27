@@ -40,6 +40,16 @@ docker-compose run --rm metadata-extractor python src/scanner.py
 > docker-compose run --rm metadata-extractor python src/scanner.py --skip-embeddings
 > ```
 
+> **Tip**: Resume a crashed scan by skipping already-processed files:
+> ```bash
+> docker-compose run --rm -e OVERRIDE_EXISTING=false metadata-extractor python src/scanner.py
+> ```
+
+> **Tip**: Adjust parallel processing workers (default is 4). Note: `.blend` files are always processed sequentially to avoid memory issues:
+> ```bash
+> docker-compose run --rm -e SCANNER_WORKERS=8 metadata-extractor python src/scanner.py
+> ```
+
 ### 6. Stopping & Resetting
 
 **Stop Containers**

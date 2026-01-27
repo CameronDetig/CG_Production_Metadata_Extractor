@@ -54,5 +54,13 @@ services:
       # Logging
       - LOG_LEVEL=INFO
 
+      # Resume support: skip files already in database (useful if scan crashes)
+      # Set to 'false' to resume, 'true' (default) to re-process everything
+      # - OVERRIDE_EXISTING=false
+
+      # Parallel processing: number of workers for non-.blend files (default: 4)
+      # .blend files are always processed sequentially to avoid memory issues
+      # - SCANNER_WORKERS=4
+
 volumes:
   model_cache:
