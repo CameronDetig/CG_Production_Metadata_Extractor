@@ -82,6 +82,10 @@ class FileScanner:
         self.detect_sequences = os.getenv('DETECT_SEQUENCES', 'true').lower() == 'true'
         self.min_sequence_length = int(os.getenv('MIN_SEQUENCE_LENGTH', '5'))
         
+        # Parse sequence extensions from env var (comma-separated)
+        sequence_ext_str = os.getenv('SEQUENCE_EXTENSIONS', '.png,.jpg,.jpeg,.exr,.tif,.tiff,.bphys,.abc,.vdb')
+        self.sequence_extensions = set(ext.strip().lower() for ext in sequence_ext_str.split(','))
+        
         # Thread pool configuration
         self.max_workers = int(os.getenv('SCANNER_WORKERS', '4'))
         self.stats_lock = threading.Lock()  # Protect stats from concurrent updates
@@ -144,7 +148,11 @@ class FileScanner:
         
         if self.detect_sequences:
             logger.info("Detecting file sequences...")
-            sequences, standalone_files = detect_sequences(files, min_sequence_length=self.min_sequence_length)
+            sequences, standalone_files = detect_sequences(
+                files, 
+                min_sequence_length=self.min_sequence_length,
+                allowed_extensions=self.sequence_extensions
+            )
             logger.info(f"Detected {len(sequences)} sequences, {len(standalone_files)} standalone files")
             logger.info("")
         

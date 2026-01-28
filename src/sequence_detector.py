@@ -70,13 +70,16 @@ def extract_frame_number(filename: str) -> Optional[Tuple[str, int, int, int]]:
     return (base_name, frame_number, padding, frame_position)
 
 
-def detect_sequences(file_paths: List[str], min_sequence_length: int = 5) -> Tuple[List[SequenceGroup], List[str]]:
+def detect_sequences(file_paths: List[str], min_sequence_length: int = 5, 
+                     allowed_extensions: Optional[set] = None) -> Tuple[List[SequenceGroup], List[str]]:
     """
     Detect file sequences from a list of file paths.
     
     Args:
         file_paths: List of file paths to analyze
         min_sequence_length: Minimum number of files to be considered a sequence
+        allowed_extensions: Optional set of extensions to check (e.g., {'.png', '.exr'})
+                           If None, all files are checked
     
     Returns:
         Tuple of (detected_sequences, standalone_files)
@@ -89,6 +92,11 @@ def detect_sequences(file_paths: List[str], min_sequence_length: int = 5) -> Tup
         directory = os.path.dirname(file_path)
         filename = os.path.basename(file_path)
         extension = Path(filename).suffix.lower()
+        
+        # Skip files with extensions not in the allowed list
+        if allowed_extensions is not None and extension not in allowed_extensions:
+            groups[(directory, filename, extension, -1)].append((file_path, -1))
+            continue
         
         result = extract_frame_number(filename)
         
