@@ -69,12 +69,7 @@ class File(Base):
     error = Column(Text)
     tags = Column(JSON, nullable=True)  # List of classification tags, e.g., ["normal_map", "grayscale"]
     
-    # Sequence-related fields (for image sequences, cache sequences, etc.)
-    is_sequence = Column(Boolean, default=False, index=True)  # True if this entry represents a file sequence
-    sequence_start_frame = Column(Integer, nullable=True)  # First frame number in sequence
-    sequence_end_frame = Column(Integer, nullable=True)  # Last frame number in sequence
-    sequence_frame_count = Column(Integer, nullable=True)  # Total number of frames in sequence
-    sequence_missing_frames = Column(JSON, nullable=True)  # List of missing frame numbers (if gaps exist)
+
     
     # Vector embedding for metadata semantic search (384 dimensions)
     metadata_embedding = Column(Vector(384) if PGVECTOR_AVAILABLE else Text)
@@ -88,6 +83,7 @@ class File(Base):
     code = relationship("Code", back_populates="file", uselist=False, cascade="all, delete-orphan")
     spreadsheet = relationship("Spreadsheet", back_populates="file", uselist=False, cascade="all, delete-orphan")
     document = relationship("Document", back_populates="file", uselist=False, cascade="all, delete-orphan")
+    cache = relationship("Cache", back_populates="file", uselist=False, cascade="all, delete-orphan")
     unknown_file = relationship("UnknownFile", back_populates="file", uselist=False, cascade="all, delete-orphan")
 
 
@@ -101,6 +97,12 @@ class Image(Base):
     resolution_y = Column(Integer)
     mode = Column(String(50))
     thumbnail_path = Column(String(1024))  # Path to 512x512 JPG thumbnail
+    
+    # Sequence fields (for image sequences)
+    is_sequence = Column(Boolean, default=False, index=True)
+    sequence_start_frame = Column(Integer, nullable=True)
+    sequence_end_frame = Column(Integer, nullable=True)
+    sequence_frame_count = Column(Integer, nullable=True)
     
     # Vector embedding for visual similarity search (512 dimensions)
     visual_embedding = Column(Vector(512) if PGVECTOR_AVAILABLE else Text)
@@ -217,6 +219,25 @@ class Document(Base):
     word_count = Column(Integer)  # approximate
     
     file = relationship("File", back_populates="document")
+
+
+class Cache(Base):
+    """Cache/simulation file-specific metadata"""
+    __tablename__ = 'caches'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    
+    # Cache-specific properties
+    cache_type = Column(String(50))  # 'physics', 'alembic', 'vdb', 'geometry'
+    
+    # Sequence fields (for cache sequences)
+    is_sequence = Column(Boolean, default=False, index=True)
+    sequence_start_frame = Column(Integer, nullable=True)
+    sequence_end_frame = Column(Integer, nullable=True)
+    sequence_frame_count = Column(Integer, nullable=True)
+    
+    file = relationship("File", back_populates="cache")
 
 
 class UnknownFile(Base):
@@ -371,17 +392,10 @@ class MetadataDatabase:
                     existing_tags = file_record.tags or []
                     merged_tags = list(set(existing_tags + new_tags))
                     file_record.tags = merged_tags
-                # Update sequence fields if provided
-                file_record.is_sequence = metadata.get('is_sequence', False)
-                file_record.sequence_start_frame = metadata.get('sequence_start_frame')
-                file_record.sequence_end_frame = metadata.get('sequence_end_frame')
-                file_record.sequence_frame_count = metadata.get('sequence_frame_count')
-                file_record.sequence_missing_frames = metadata.get('sequence_missing_frames')
                 # Update metadata embedding if provided
                 if metadata.get('metadata_embedding'):
                     file_record.metadata_embedding = metadata['metadata_embedding']
             else:
-                # Create new file record
                 file_record = File(
                     file_name=metadata.get('file_name'),
                     file_path=metadata.get('file_path'),
@@ -395,11 +409,6 @@ class MetadataDatabase:
                     version_number=metadata.get('version_number'),
                     error=metadata.get('error'),
                     tags=metadata.get('tags'),
-                    is_sequence=metadata.get('is_sequence', False),
-                    sequence_start_frame=metadata.get('sequence_start_frame'),
-                    sequence_end_frame=metadata.get('sequence_end_frame'),
-                    sequence_frame_count=metadata.get('sequence_frame_count'),
-                    sequence_missing_frames=metadata.get('sequence_missing_frames'),
                     metadata_embedding=metadata.get('metadata_embedding')
                 )
                 session.add(file_record)
@@ -443,6 +452,10 @@ class MetadataDatabase:
                     resolution_y=metadata.get('resolution_y'),
                     mode=metadata.get('mode'),
                     thumbnail_path=metadata.get('thumbnail_path'),
+                    is_sequence=metadata.get('is_sequence', False),
+                    sequence_start_frame=metadata.get('sequence_start_frame'),
+                    sequence_end_frame=metadata.get('sequence_end_frame'),
+                    sequence_frame_count=metadata.get('sequence_frame_count'),
                     visual_embedding=metadata.get('visual_embedding')
                 )
                 session.add(image_record)
@@ -521,6 +534,21 @@ class MetadataDatabase:
                     word_count=metadata.get('word_count')
                 )
                 session.add(document_record)
+
+            elif metadata.get('file_type') == 'cache':
+                # Delete existing cache record if updating
+                if existing_file and file_record.cache:
+                    session.delete(file_record.cache)
+                
+                cache_record = Cache(
+                    file_id=file_id,
+                    cache_type=metadata.get('cache_type'),
+                    is_sequence=metadata.get('is_sequence', False),
+                    sequence_start_frame=metadata.get('sequence_start_frame'),
+                    sequence_end_frame=metadata.get('sequence_end_frame'),
+                    sequence_frame_count=metadata.get('sequence_frame_count')
+                )
+                session.add(cache_record)
 
             elif metadata.get('file_type') == 'other':
                 # Delete existing unknown record if updating

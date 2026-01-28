@@ -44,6 +44,62 @@ def extract_show_from_path(file_path: str) -> Optional[str]:
     return None
 
 
+def extract_path_from_show(file_path: str, show_name: Optional[str] = None) -> str:
+    """
+    Extract path starting from show name onwards for thumbnail naming.
+    
+    Args:
+        file_path: Full file path (S3 URI or local path)
+        show_name: Optional show name (if already extracted)
+        
+    Returns:
+        Path from show name onwards with underscores, or just filename if no show
+        
+    Examples:
+        >>> extract_path_from_show("s3://bucket/shows/cosmos/render/0001.png", "cosmos")
+        'cosmos_render_0001'
+        >>> extract_path_from_show("/data/shows/spring/assets/tree.blend", "spring")
+        'spring_assets_tree'
+        >>> extract_path_from_show("/data/other/texture.png", None)
+        'texture'
+    """
+    # Normalize path separators
+    normalized_path = file_path.replace('\\', '/')
+    
+    # Remove file extension
+    path_without_ext = Path(normalized_path).stem
+    parent_path = str(Path(normalized_path).parent)
+    
+    if show_name:
+        # Find the show name in the path and extract from there onwards
+        show_marker = f'/shows/{show_name}/'
+        
+        if show_marker in normalized_path.lower():
+            # Split on the show marker and get everything after 'shows/'
+            parts = normalized_path.lower().split('/shows/')
+            if len(parts) >= 2:
+                # Get the path from show name onwards (including show name)
+                remaining_path = parts[1]
+                
+                # Remove extension from the last component
+                path_parts = remaining_path.split('/')
+                if path_parts:
+                    # Replace extension in last part
+                    path_parts[-1] = Path(path_parts[-1]).stem
+                    
+                    # Join with underscores
+                    result = '_'.join(path_parts)
+                    
+                    # Replace any remaining dots with underscores (except in numbers)
+                    # This handles cases like "file.v001" -> "file_v001"
+                    result = result.replace('.', '_')
+                    
+                    return result
+    
+    # Fallback: just use the filename without extension
+    return path_without_ext.replace('.', '_')
+
+
 def extract_version_number(filename: str) -> Optional[int]:
     """
     Extract version number from filename (vXXX pattern)

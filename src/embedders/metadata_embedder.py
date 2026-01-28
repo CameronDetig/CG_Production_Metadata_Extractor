@@ -36,7 +36,24 @@ class MetadataEmbedder:
             else:
                 logger.info("No GPU detected, using CPU")
             
-            self.model = SentenceTransformer(self.model_name, device=device)
+            # Load model - force low_cpu_mem_usage=False to prevent meta tensor errors
+            try:
+                self.model = SentenceTransformer(
+                    self.model_name, 
+                    device=device,
+                    model_kwargs={'low_cpu_mem_usage': False}
+                )
+            except Exception as e:
+                logger.warning(f"Failed to load model on {device}: {e}")
+                # Fallback: simple load on cpu
+                self.model = SentenceTransformer(
+                    self.model_name, 
+                    device='cpu',
+                    model_kwargs={'low_cpu_mem_usage': False}
+                )
+                if device == 'cuda':
+                    self.model = self.model.to(device)
+            
             logger.info("Metadata embedding model loaded successfully")
     
     def metadata_to_text(self, metadata: Dict[str, Any]) -> str:

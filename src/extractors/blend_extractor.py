@@ -14,7 +14,7 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 import platform
 
-from .utils.metadata_utils import extract_show_from_path
+from .utils.metadata_utils import extract_show_from_path, extract_path_from_show
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +195,8 @@ def extract_blend_metadata(file_path):
         thumbnail_base = Path(thumbnail_base_path) / show_folder / 'blend'
         thumbnail_base.mkdir(parents=True, exist_ok=True)
 
-        base_name = file_path_obj.stem
+        # Use full path from show name onwards
+        base_name = extract_path_from_show(file_path, show_name)
         thumbnail_path = thumbnail_base / f"{base_name}_thumb.jpg"
         thumbnail_path_str = str(thumbnail_path.absolute())
 

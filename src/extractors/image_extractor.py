@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image
 from datetime import datetime
 from .utils.thumbnail_utils import create_image_thumbnail
-from .utils.metadata_utils import extract_show_from_path
+from .utils.metadata_utils import extract_show_from_path, extract_path_from_show
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -158,8 +158,13 @@ def _extract_exr_metadata(file_path):
         return {'error': error_msg}
 
 
-def extract_image_metadata(file_path):
-    """Extract metadata from image files"""
+def extract_image_metadata(file_path, override_filename=None):
+    """Extract metadata from image files
+    
+    Args:
+        file_path: Path to the image file
+        override_filename: Optional filename to use for thumbnail (e.g., sequence pattern name)
+    """
     file_path_obj = Path(file_path)
     
     metadata = {
@@ -250,7 +255,14 @@ def extract_image_metadata(file_path):
             thumbnail_base = Path(thumbnail_base_path) / show_folder / 'image'
             thumbnail_base.mkdir(parents=True, exist_ok=True)
             
-            base_name = file_path_obj.stem
+            # Use override_filename for sequences, otherwise use full path from show
+            if override_filename:
+                # For sequences, use the pattern name
+                base_name = Path(override_filename).stem
+            else:
+                # For regular files, use full path from show name onwards
+                # This creates names like: charge_story_and_editorial_..._filename
+                base_name = extract_path_from_show(file_path, show_name)
             thumbnail_path = thumbnail_base / f"{base_name}_thumb.jpg"
             
             # Skip thumbnail generation for .odg (requires LibreOffice)

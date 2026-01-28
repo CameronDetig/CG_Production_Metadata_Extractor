@@ -25,8 +25,9 @@ from extractors.audio_extractor import extract_audio_metadata
 from extractors.code_extractor import extract_code_metadata
 from extractors.spreadsheet_extractor import extract_spreadsheet_metadata
 from extractors.document_extractor import extract_document_metadata
+from extractors.cache_extractor import extract_cache_metadata
 from extractors.unknown_extractor import extract_unknown_metadata
-from extractors.utils.metadata_utils import extract_show_from_path, extract_version_number
+from extractors.utils.metadata_utils import extract_show_from_path, extract_version_number, extract_path_from_show
 from embedders import MetadataEmbedder, CLIPEmbedder
 from sequence_detector import detect_sequences, SequenceGroup
 from PIL import Image
@@ -55,6 +56,7 @@ CODE_EXTENSIONS = {
 }
 SPREADSHEET_EXTENSIONS = {'.csv', '.xlsx', '.xls', '.ods', '.tsv'}
 DOCUMENT_EXTENSIONS = {'.txt', '.pdf', '.doc', '.docx', '.odt', '.odp', '.rtf', '.md'}
+CACHE_EXTENSIONS = {'.bphys', '.abc', '.vdb', '.bgeo', '.geo'}
 
 # Memory-heavy file types that should be processed sequentially (not in parallel)
 # .blend files can use 8-15GB RAM each when Blender processes them
@@ -81,10 +83,11 @@ class FileScanner:
         # Sequence detection configuration
         self.detect_sequences = os.getenv('DETECT_SEQUENCES', 'true').lower() == 'true'
         self.min_sequence_length = int(os.getenv('MIN_SEQUENCE_LENGTH', '5'))
+        self.min_padding = int(os.getenv('MIN_PADDING', '3'))
         
-        # Parse sequence extensions from env var (comma-separated)
-        sequence_ext_str = os.getenv('SEQUENCE_EXTENSIONS', '.png,.jpg,.jpeg,.exr,.tif,.tiff,.bphys,.abc,.vdb')
-        self.sequence_extensions = set(ext.strip().lower() for ext in sequence_ext_str.split(','))
+        # Sequence extensions are determined by file types that support sequences
+        # Only images and cache files support sequence detection
+        self.sequence_extensions = IMAGE_EXTENSIONS | CACHE_EXTENSIONS
         
         # Thread pool configuration
         self.max_workers = int(os.getenv('SCANNER_WORKERS', '4'))
@@ -100,6 +103,7 @@ class FileScanner:
             'code_files': 0,
             'spreadsheet_files': 0,
             'documents': 0,
+            'cache_files': 0,
             'other_files': 0,
             'errors': 0,
             'skipped': 0,
@@ -151,7 +155,8 @@ class FileScanner:
             sequences, standalone_files = detect_sequences(
                 files, 
                 min_sequence_length=self.min_sequence_length,
-                allowed_extensions=self.sequence_extensions
+                allowed_extensions=self.sequence_extensions,
+                min_padding=self.min_padding
             )
             logger.info(f"Detected {len(sequences)} sequences, {len(standalone_files)} standalone files")
             logger.info("")
@@ -270,7 +275,16 @@ class FileScanner:
                 file_type = 'other'
             
             # Extract metadata from middle frame
-            metadata = self._process_with_storage(sequence.middle_frame_path, extractor_func, file_type)
+            # For images, pass the sequence pattern name for thumbnail naming
+            if file_ext in IMAGE_EXTENSIONS:
+                with self.storage.get_file(sequence.middle_frame_path) as local_path:
+                    metadata = extractor_func(local_path, override_filename=sequence.base_name)
+                    if metadata:
+                        metadata['file_path'] = sequence.middle_frame_path
+                        metadata['file_name'] = os.path.basename(sequence.middle_frame_path)
+                        metadata['file_type'] = file_type
+            else:
+                metadata = self._process_with_storage(sequence.middle_frame_path, extractor_func, file_type)
             
             if metadata:
                 # Override with sequence-specific data
@@ -278,11 +292,19 @@ class FileScanner:
                 metadata['sequence_start_frame'] = sequence.start_frame
                 metadata['sequence_end_frame'] = sequence.end_frame
                 metadata['sequence_frame_count'] = sequence.frame_count
-                metadata['sequence_missing_frames'] = sequence.missing_frames
                 
                 # Update file_name and file_path to use pattern
                 metadata['file_name'] = sequence.base_name
                 metadata['file_path'] = sequence.pattern_path
+                
+                # Extract show name from pattern path (important for sequences)
+                metadata['show'] = extract_show_from_path(sequence.pattern_path)
+                
+                # Detect texture type tags for image sequences using pattern path
+                if file_type == 'image':
+                    tags = detect_texture_tags(sequence.pattern_path, metadata.get('mode'))
+                    if tags:
+                        metadata['tags'] = tags
                 
                 # Aggregate file_size from all files in sequence
                 total_size = 0
@@ -377,6 +399,11 @@ class FileScanner:
                 with self.stats_lock:
                     self.stats['documents'] += 1
                 
+            elif file_ext in CACHE_EXTENSIONS:
+                metadata = self._process_with_storage(file_path, extract_cache_metadata, 'cache')
+                with self.stats_lock:
+                    self.stats['cache_files'] += 1
+                
             else:
                 metadata = self._process_with_storage(file_path, extract_unknown_metadata, 'other')
                 with self.stats_lock:
@@ -466,32 +493,13 @@ class FileScanner:
                         # Save the temp directory path for cleanup
                         temp_dir = Path(thumbnail_path).parent
                         
-                        # Generate a unique filename for the thumbnail using full path
-                        # This prevents conflicts between files with same name in different folders
+                        # Generate a unique filename for the thumbnail using path from show onwards
+                        # This creates shorter, more readable names while maintaining uniqueness
                         # Example: s3://cg-production-data/shows/cosmos/render/0001.png 
-                        #       -> cg-production-data_shows_cosmos_render_0001_thumb.jpg
-                        if self.storage.__class__.__name__ == 'S3StorageAdapter':
-                            # For S3: use bucket name + full key path
-                            bucket_name = os.getenv('ASSET_BUCKET_NAME', 'cg-production-data')
-                            # Remove s3:// prefix and bucket name, get the key
-                            if file_path.startswith(f's3://{bucket_name}/'):
-                                s3_key = file_path.replace(f's3://{bucket_name}/', '')
-                            else:
-                                # Fallback if path format is different
-                                s3_key = file_path.replace('s3://', '').split('/', 1)[1] if '/' in file_path else file_path
-                            # Replace slashes and dots with underscores, remove extension
-                            safe_path = s3_key.replace('/', '_').replace('.', '_')
-                            thumbnail_filename = f"{bucket_name}_{safe_path}_thumb.jpg"
-                        else:
-                            # For local: use data path + relative path
-                            data_path = os.getenv('DATA_PATH', '/data')
-                            try:
-                                rel_path = os.path.relpath(file_path, data_path)
-                            except ValueError:
-                                # If paths are on different drives (Windows), use absolute path
-                                rel_path = file_path.replace(':', '_').replace('/', '_').replace('\\', '_')
-                            safe_path = rel_path.replace('/', '_').replace('\\', '_').replace('.', '_')
-                            thumbnail_filename = f"local_{safe_path}_thumb.jpg"
+                        #       -> cosmos_render_0001_thumb.jpg
+                        show_name = metadata.get('show')
+                        path_from_show = extract_path_from_show(file_path, show_name)
+                        thumbnail_filename = f"{path_from_show}_thumb.jpg"
                         
                         # Upload thumbnail and get S3 URI
                         # Pass show name to ensure organized structure in S3
@@ -588,8 +596,6 @@ class FileScanner:
         logger.info("SCAN SUMMARY:")
         logger.info("="*25)
         logger.info(f"Total files scanned: {self.stats['scanned']}")
-        if self.stats['sequences'] > 0:
-            logger.info(f"  - File sequences: {self.stats['sequences']}")
         logger.info(f"  - Images: {self.stats['images']}")
         logger.info(f"  - Videos: {self.stats['videos']}")
         logger.info(f"  - Blend files: {self.stats['blend_files']}")
@@ -600,6 +606,7 @@ class FileScanner:
         logger.info(f"  - Other files: {self.stats['other_files']}")
         logger.info(f"Errors: {self.stats['errors']}")
         logger.info(f"Skipped: {self.stats['skipped']}")
+        logger.info(f"Sequence Files: {self.stats['sequences']}")
         if not self.skip_embeddings:
             logger.info(f"Embeddings generated: {self.stats['embeddings_generated']}")
         

@@ -39,8 +39,18 @@ class CLIPEmbedder:
                 logger.info("No GPU detected for CLIP, using CPU")
             
             logger.info(f"Loading CLIP model: {self.model_name} on {self.device}")
-            self.model = CLIPModel.from_pretrained(self.model_name).to(self.device)
-            self.processor = CLIPProcessor.from_pretrained(self.model_name, use_fast=True)
+            # Load model - force low_cpu_mem_usage=False to prevent meta tensor errors on CPU
+            try:
+                self.model = CLIPModel.from_pretrained(self.model_name, low_cpu_mem_usage=False).to(self.device)
+                self.processor = CLIPProcessor.from_pretrained(self.model_name, use_fast=True)
+            except Exception as e:
+                logger.warning(f"Failed to load CLIP model with default settings: {e}")
+                # Fallback: strict CPU load
+                self.model = CLIPModel.from_pretrained(self.model_name, low_cpu_mem_usage=False)
+                self.processor = CLIPProcessor.from_pretrained(self.model_name, use_fast=True)
+                if self.device == 'cuda':
+                    self.model = self.model.to(self.device)
+            
             logger.info("CLIP model loaded successfully")
     
 

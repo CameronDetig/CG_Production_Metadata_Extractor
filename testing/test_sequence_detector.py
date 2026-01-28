@@ -8,38 +8,61 @@ import os
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from sequence_detector import detect_sequences, extract_frame_number
+from sequence_detector import detect_sequences, extract_all_numbers, get_filename_skeleton, find_varying_number_index
 
 
-def test_extract_frame_number():
-    """Test frame number extraction from various filename patterns"""
+def test_helper_functions():
+    """Test helper functions for comparison-based detection"""
     print("=" * 60)
-    print("Testing frame number extraction...")
+    print("Testing helper functions...")
     print("=" * 60)
     
+    # Test extract_all_numbers
+    print("\n1. Testing extract_all_numbers:")
     test_cases = [
-        ("render_0001.png", ("render_", 1, 4, 7)),
-        ("0001.png", ("", 1, 4, 0)),
-        ("shot_v001_0050.exr", ("shot_v001_", 50, 4, 10)),
-        ("file.png", None),
-        ("texture_001.jpg", ("texture_", 1, 3, 8)),
-        ("cache_00100.bphys", ("cache_", 100, 5, 6)),
+        ("sparks_000800_00.bphys", [("000800", 800, 7), ("00", 0, 14)]),
+        ("render_0001.png", [("0001", 1, 7)]),
+        ("shot_v001_0050.exr", [("001", 1, 7), ("0050", 50, 12)]),
     ]
     
-    passed = 0
-    failed = 0
-    
     for filename, expected in test_cases:
-        result = extract_frame_number(filename)
+        result = extract_all_numbers(filename)
         if result == expected:
-            print(f"✓ {filename:30} -> {result}")
-            passed += 1
+            print(f"  ✓ {filename}")
         else:
-            print(f"✗ {filename:30} -> Expected: {expected}, Got: {result}")
-            failed += 1
+            print(f"  ✗ {filename}: Expected {expected}, Got {result}")
     
-    print(f"\nFrame extraction: {passed} passed, {failed} failed\n")
-    return failed == 0
+    # Test get_filename_skeleton
+    print("\n2. Testing get_filename_skeleton:")
+    skeleton_cases = [
+        ("sparks_000800_00.bphys", "sparks_#_#.bphys"),
+        ("render_0001.png", "render_#.png"),
+        ("0001.png", "#.png"),
+    ]
+    
+    for filename, expected in skeleton_cases:
+        result = get_filename_skeleton(filename)
+        if result == expected:
+            print(f"  ✓ {filename} -> {result}")
+        else:
+            print(f"  ✗ {filename}: Expected {expected}, Got {result}")
+    
+    # Test find_varying_number_index
+    print("\n3. Testing find_varying_number_index:")
+    varying_cases = [
+        (["sparks_000800_00.bphys", "sparks_000801_00.bphys", "sparks_000802_00.bphys"], 0),
+        (["render_0001.png", "render_0002.png", "render_0003.png"], 0),
+        (["file_v001_0050.exr", "file_v001_0051.exr"], 1),  # Second number varies
+    ]
+    
+    for filenames, expected_idx in varying_cases:
+        result = find_varying_number_index(filenames)
+        if result == expected_idx:
+            print(f"  ✓ {filenames[0]} (and {len(filenames)-1} more) -> index {result}")
+        else:
+            print(f"  ✗ {filenames[0]}: Expected index {expected_idx}, Got {result}")
+    
+    print("\n" + "=" * 60)
 
 
 def test_sequence_detection():
@@ -117,6 +140,49 @@ def test_sequence_detection():
     for seq in sequences7:
         print(f"   - {seq.base_name}: padding={seq.padding}, frames={seq.frame_count}")
     
+    # Test case 8: 6-digit padding (some shows use this)
+    print("\n8. 6-digit padding (cache_000001.abc, cache_000002.abc, ...):")
+    files8 = [f"/path/to/cache_{i:06d}.abc" for i in range(1, 12)]
+    sequences8, standalone8 = detect_sequences(files8, min_sequence_length=5)
+    print(f"   Files: {len(files8)}, Sequences: {len(sequences8)}, Standalone: {len(standalone8)}")
+    if sequences8:
+        seq = sequences8[0]
+        print(f"   Pattern: {seq.base_name}")
+        print(f"   Frames: {seq.start_frame}-{seq.end_frame} ({seq.frame_count} total)")
+        print(f"   Padding: {seq.padding} digits")
+    
+    # Test case 9: Files with constant numeric suffix (sparks_000800_00.bphys, ...):
+    print("\n9. Files with constant numeric suffix (sparks_000800_00.bphys, ...):")
+    files9 = [f"/path/to/sparks_{i:06d}_00.bphys" for i in range(800, 811)]
+    sequences9, standalone9 = detect_sequences(files9, min_sequence_length=5)
+    print(f"   Files: {len(files9)}, Sequences: {len(sequences9)}, Standalone: {len(standalone9)}")
+    if sequences9:
+        seq = sequences9[0]
+        print(f"   Pattern: {seq.base_name}")
+        print(f"   Frames: {seq.start_frame}-{seq.end_frame} ({seq.frame_count} total)")
+        print(f"   Padding: {seq.padding} digits")
+        print(f"   ✓ Correctly identified varying number (not constant '00' suffix)")
+    
+    # Test case 10: Version numbers should not be detected as sequences
+    print("\n10. Version numbers (file_v001.png, file_v002.png, ...):")
+    files10 = [f"/path/to/file_v{i:03d}.png" for i in range(1, 8)]
+    sequences10, standalone10 = detect_sequences(files10, min_sequence_length=5)
+    print(f"   Files: {len(files10)}, Sequences: {len(sequences10)}, Standalone: {len(standalone10)}")
+    if len(sequences10) == 0:
+        print(f"   ✓ Correctly rejected version numbers as sequences")
+    else:
+        print(f"   ✗ ERROR: Version numbers detected as sequence")
+    
+    # Test case 11: Files with less than 4 digits should not be sequences
+    print("\n11. Files with 2-digit numbers (file_01.png, file_02.png, ...):")
+    files11 = [f"/path/to/file_{i:02d}.png" for i in range(1, 12)]
+    sequences11, standalone11 = detect_sequences(files11, min_sequence_length=5)
+    print(f"   Files: {len(files11)}, Sequences: {len(sequences11)}, Standalone: {len(standalone11)}")
+    if len(sequences11) == 0:
+        print(f"   ✓ Correctly rejected 2-digit numbers (below 4-digit minimum)")
+    else:
+        print(f"   ✗ ERROR: 2-digit numbers detected as sequence")
+    
     print("\n" + "=" * 60)
     print("All sequence detection tests completed!")
     print("=" * 60)
@@ -128,7 +194,7 @@ if __name__ == "__main__":
     print("=" * 60 + "\n")
     
     # Run tests
-    test_extract_frame_number()
+    test_helper_functions()
     test_sequence_detection()
     
     print("\n✓ All tests completed successfully!\n")

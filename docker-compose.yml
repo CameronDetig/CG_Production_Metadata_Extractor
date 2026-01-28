@@ -38,7 +38,7 @@ services:
       - STORAGE_TYPE=local # Change to 's3' for AWS deployment
 
       # Local storage path (used when STORAGE_TYPE=local)
-      - DATA_PATH=/app/cg-production-data
+      - DATA_PATH=/app/cg-production-data/shows/charge/story_and_editorial
       - THUMBNAIL_PATH=/app/cg-production-data-thumbnails
 
       # S3 configuration (used when STORAGE_TYPE=s3)
@@ -53,7 +53,6 @@ services:
 
       # Logging
       - LOG_LEVEL=INFO
-
       # Resume support: skip files already in database (useful if scan crashes)
       # Set to 'false' to resume, 'true' (default) to re-process everything
       # - OVERRIDE_EXISTING=false
