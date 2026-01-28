@@ -51,6 +51,19 @@ class StorageAdapter(ABC):
         pass
     
     @abstractmethod
+    def get_file_size(self, file_path: str) -> int:
+        """
+        Get file size in bytes without downloading
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            File size in bytes
+        """
+        pass
+    
+    @abstractmethod
     def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str, show_name: Optional[str] = None) -> str:
         """
         Upload thumbnail to storage
@@ -105,6 +118,10 @@ class LocalStorageAdapter(StorageAdapter):
     def file_exists(self, file_path: str) -> bool:
         """Check if file exists locally"""
         return os.path.exists(file_path)
+    
+    def get_file_size(self, file_path: str) -> int:
+        """Get file size in bytes"""
+        return os.path.getsize(file_path)
     
     def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str, show_name: Optional[str] = None) -> str:
         """
@@ -242,6 +259,24 @@ class S3StorageAdapter(StorageAdapter):
             return True
         except:
             return False
+    
+    def get_file_size(self, file_path: str) -> int:
+        """Get file size in bytes using HEAD request (no download)"""
+        # Parse S3 path
+        if file_path.startswith('s3://'):
+            parts = file_path[5:].split('/', 1)
+            bucket = parts[0]
+            key = parts[1] if len(parts) > 1 else ''
+        else:
+            bucket = self.bucket_name
+            key = file_path
+        
+        try:
+            response = self.s3_client.head_object(Bucket=bucket, Key=key)
+            return response['ContentLength']
+        except Exception as e:
+            logger.error(f"Error getting file size for {file_path}: {e}")
+            return 0
     
     def upload_thumbnail(self, thumbnail_path: str, file_type: str, filename: str, show_name: Optional[str] = None) -> str:
         """

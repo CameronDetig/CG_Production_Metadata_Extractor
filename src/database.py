@@ -69,6 +69,13 @@ class File(Base):
     error = Column(Text)
     tags = Column(JSON, nullable=True)  # List of classification tags, e.g., ["normal_map", "grayscale"]
     
+    # Sequence-related fields (for image sequences, cache sequences, etc.)
+    is_sequence = Column(Boolean, default=False, index=True)  # True if this entry represents a file sequence
+    sequence_start_frame = Column(Integer, nullable=True)  # First frame number in sequence
+    sequence_end_frame = Column(Integer, nullable=True)  # Last frame number in sequence
+    sequence_frame_count = Column(Integer, nullable=True)  # Total number of frames in sequence
+    sequence_missing_frames = Column(JSON, nullable=True)  # List of missing frame numbers (if gaps exist)
+    
     # Vector embedding for metadata semantic search (384 dimensions)
     metadata_embedding = Column(Vector(384) if PGVECTOR_AVAILABLE else Text)
     
@@ -364,6 +371,12 @@ class MetadataDatabase:
                     existing_tags = file_record.tags or []
                     merged_tags = list(set(existing_tags + new_tags))
                     file_record.tags = merged_tags
+                # Update sequence fields if provided
+                file_record.is_sequence = metadata.get('is_sequence', False)
+                file_record.sequence_start_frame = metadata.get('sequence_start_frame')
+                file_record.sequence_end_frame = metadata.get('sequence_end_frame')
+                file_record.sequence_frame_count = metadata.get('sequence_frame_count')
+                file_record.sequence_missing_frames = metadata.get('sequence_missing_frames')
                 # Update metadata embedding if provided
                 if metadata.get('metadata_embedding'):
                     file_record.metadata_embedding = metadata['metadata_embedding']
@@ -382,6 +395,11 @@ class MetadataDatabase:
                     version_number=metadata.get('version_number'),
                     error=metadata.get('error'),
                     tags=metadata.get('tags'),
+                    is_sequence=metadata.get('is_sequence', False),
+                    sequence_start_frame=metadata.get('sequence_start_frame'),
+                    sequence_end_frame=metadata.get('sequence_end_frame'),
+                    sequence_frame_count=metadata.get('sequence_frame_count'),
+                    sequence_missing_frames=metadata.get('sequence_missing_frames'),
                     metadata_embedding=metadata.get('metadata_embedding')
                 )
                 session.add(file_record)
