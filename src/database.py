@@ -5,7 +5,7 @@ Supports both SQLite (local development) and PostgreSQL with pgvector (AWS RDS)
 import os
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, Index, JSON, event, text
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Text, Float, Boolean, DateTime, ForeignKey, Index, JSON, event, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
 from sqlalchemy.pool import NullPool, QueuePool
@@ -60,7 +60,7 @@ class File(Base):
     file_path = Column(String(1024), unique=True, nullable=False, index=True)
     file_type = Column(String(50), nullable=False, index=True)
     extension = Column(String(50))
-    file_size = Column(Integer)
+    file_size = Column(BigInteger)  # Changed to BigInteger to support files/sequences > 2GB
     created_date = Column(DateTime)
     modified_date = Column(DateTime)
     scan_date = Column(DateTime, nullable=False, default=datetime.utcnow)

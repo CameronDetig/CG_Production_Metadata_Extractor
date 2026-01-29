@@ -261,53 +261,72 @@ def detect_sequences(file_paths: List[str], min_sequence_length: int = 5,
         # Sort by frame number
         frame_data.sort(key=lambda x: x[1])
         
-        file_paths_in_seq = [fp for fp, _, _, _ in frame_data]
-        frame_numbers = [fn for _, fn, _, _ in frame_data]
+        # Split into continuous runs (handle gaps)
+        continuous_runs = []
+        current_run = [frame_data[0]]
         
-        start_frame = frame_numbers[0]
-        end_frame = frame_numbers[-1]
-        frame_count = len(frame_numbers)
+        for i in range(1, len(frame_data)):
+            prev_frame = frame_data[i-1][1]  # frame number
+            curr_frame = frame_data[i][1]     # frame number
+            
+            # Check if frames are consecutive
+            if curr_frame == prev_frame + 1:
+                current_run.append(frame_data[i])
+            else:
+                # Gap detected, save current run and start new one
+                continuous_runs.append(current_run)
+                current_run = [frame_data[i]]
         
-        # Check for gaps - sequences must be continuous
-        expected_frames = set(range(start_frame, end_frame + 1))
-        actual_frames = set(frame_numbers)
-        missing_frames = sorted(expected_frames - actual_frames)
+        # Don't forget the last run
+        continuous_runs.append(current_run)
         
-        if missing_frames:
-            # Sequence has gaps, treat as standalone files
-            standalone_files.extend(file_paths_in_seq)
-            continue
-        
-        # Find middle frame for metadata extraction
-        middle_index = len(file_paths_in_seq) // 2
-        middle_frame_path = file_paths_in_seq[middle_index]
-        
-        # Generate pattern name with suffix
-        frame_range = f"[{start_frame:0{padding}d}-{end_frame:0{padding}d}]"
-        if base_name:
-            pattern_name = f"{base_name}{frame_range}{suffix}{extension}"
-        else:
-            pattern_name = f"{frame_range}{suffix}{extension}"
-        
-        # Generate full pattern path
-        pattern_path = os.path.join(directory, pattern_name)
-        
-        sequence = SequenceGroup(
-            base_name=pattern_name,
-            file_paths=file_paths_in_seq,
-            start_frame=start_frame,
-            end_frame=end_frame,
-            frame_count=frame_count,
-            middle_frame_path=middle_frame_path,
-            padding=padding,
-            pattern_path=pattern_path,
-            directory=directory,
-            extension=extension
-        )
-        
-        sequences.append(sequence)
-        
-        logger.info(f"Detected sequence: {pattern_name} ({frame_count} frames)")
+        # Process each continuous run as a separate sequence
+        for run in continuous_runs:
+            if len(run) < min_sequence_length:
+                # Run is too short, treat as standalone files
+                standalone_files.extend([item[0] for item in run])
+                continue
+            
+            run_frame_numbers = [item[1] for item in run]
+            run_file_paths = [item[0] for item in run]
+            
+            start_frame = run_frame_numbers[0]
+            end_frame = run_frame_numbers[-1]
+            frame_count = len(run_frame_numbers)
+            
+            # Find middle frame for metadata extraction
+            middle_index = len(run_file_paths) // 2
+            middle_frame_path = run_file_paths[middle_index]
+            
+            # Generate pattern name with suffix
+            frame_range = f"[{start_frame:0{padding}d}-{end_frame:0{padding}d}]"
+            if base_name:
+                pattern_name = f"{base_name}{frame_range}{suffix}{extension}"
+            else:
+                pattern_name = f"{frame_range}{suffix}{extension}"
+            
+            # Get directory from first file path
+            directory = os.path.dirname(run_file_paths[0])
+            
+            # Generate full pattern path
+            pattern_path = os.path.join(directory, pattern_name)
+            
+            sequence = SequenceGroup(
+                base_name=pattern_name,
+                file_paths=run_file_paths,
+                start_frame=start_frame,
+                end_frame=end_frame,
+                frame_count=frame_count,
+                middle_frame_path=middle_frame_path,
+                padding=padding,
+                pattern_path=pattern_path,
+                directory=directory,
+                extension=extension
+            )
+            
+            sequences.append(sequence)
+            
+            logger.info(f"Detected sequence: {pattern_name} ({frame_count} frames)")
     
     logger.info(f"Sequence detection complete: {len(sequences)} sequences, "
                f"{len(standalone_files)} standalone files")
