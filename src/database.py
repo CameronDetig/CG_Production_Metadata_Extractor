@@ -24,6 +24,12 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 
+def _truncate_microseconds(dt: datetime) -> datetime:
+    """Truncate microseconds from datetime for cleaner storage"""
+    if dt is None:
+        return None
+    return dt.replace(microsecond=0)
+
 
 
 
@@ -382,7 +388,7 @@ class MetadataDatabase:
                 file_record.file_size = metadata.get('file_size')
                 file_record.created_date = metadata.get('created_date')
                 file_record.modified_date = metadata.get('modified_date')
-                file_record.scan_date = datetime.utcnow()
+                file_record.scan_date = _truncate_microseconds(datetime.utcnow())
                 file_record.show = metadata.get('show')
                 file_record.version_number = metadata.get('version_number')
                 file_record.error = metadata.get('error')
@@ -404,7 +410,7 @@ class MetadataDatabase:
                     file_size=metadata.get('file_size'),
                     created_date=metadata.get('created_date'),
                     modified_date=metadata.get('modified_date'),
-                    scan_date=datetime.utcnow(),
+                    scan_date=_truncate_microseconds(datetime.utcnow()),
                     show=metadata.get('show'),
                     version_number=metadata.get('version_number'),
                     error=metadata.get('error'),
@@ -550,7 +556,7 @@ class MetadataDatabase:
                 )
                 session.add(cache_record)
 
-            elif metadata.get('file_type') == 'other':
+            elif metadata.get('file_type') == 'unknown':
                 # Delete existing unknown record if updating
                 if existing_file and file_record.unknown_file:
                     session.delete(file_record.unknown_file)

@@ -38,7 +38,7 @@ services:
       - STORAGE_TYPE=local # Change to 's3' for AWS deployment
 
       # Local storage path (used when STORAGE_TYPE=local)
-      - DATA_PATH=/app/cg-production-data/shows/charge/story_and_editorial
+      - DATA_PATH=/app/cg-production-data/shows/sintel/
       - THUMBNAIL_PATH=/app/cg-production-data-thumbnails
 
       # S3 configuration (used when STORAGE_TYPE=s3)

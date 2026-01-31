@@ -9,7 +9,7 @@ import json
 import logging
 from datetime import datetime
 from .utils.thumbnail_utils import create_video_thumbnail
-from .utils.metadata_utils import extract_show_from_path, extract_path_from_show
+from .utils.metadata_utils import extract_show_from_path, extract_path_from_show, truncate_microseconds
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +23,8 @@ def extract_video_metadata(file_path):
         'file_name': os.path.basename(file_path),
         'file_size': os.path.getsize(file_path),
         'file_type': 'video',
-        'modified_date': datetime.fromtimestamp(os.path.getmtime(file_path)),
-        'created_date': datetime.fromtimestamp(os.path.getctime(file_path)),
+        'modified_date': truncate_microseconds(datetime.fromtimestamp(os.path.getmtime(file_path))),
+        'created_date': truncate_microseconds(datetime.fromtimestamp(os.path.getctime(file_path))),
     }
     
     try:

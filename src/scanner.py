@@ -27,7 +27,7 @@ from extractors.spreadsheet_extractor import extract_spreadsheet_metadata
 from extractors.document_extractor import extract_document_metadata
 from extractors.cache_extractor import extract_cache_metadata
 from extractors.unknown_extractor import extract_unknown_metadata
-from extractors.utils.metadata_utils import extract_show_from_path, extract_version_number, extract_path_from_show
+from extractors.utils.metadata_utils import extract_show_from_path, extract_version_number, extract_path_from_show, truncate_microseconds
 from embedders import MetadataEmbedder, CLIPEmbedder
 from sequence_detector import detect_sequences, SequenceGroup
 from PIL import Image
@@ -104,7 +104,7 @@ class FileScanner:
             'spreadsheet_files': 0,
             'documents': 0,
             'cache_files': 0,
-            'other_files': 0,
+            'unknown_files': 0,
             'errors': 0,
             'skipped': 0,
             'embeddings_generated': 0
@@ -270,15 +270,19 @@ class FileScanner:
             elif file_ext in DOCUMENT_EXTENSIONS:
                 extractor_func = extract_document_metadata
                 file_type = 'document'
+            elif file_ext in CACHE_EXTENSIONS:
+                extractor_func = extract_cache_metadata
+                file_type = 'cache'
             else:
                 extractor_func = extract_unknown_metadata
-                file_type = 'other'
+                file_type = 'unknown'
             
             # Extract metadata from middle frame
-            # For images, pass the sequence pattern name for thumbnail naming
+            # For images, pass the sequence pattern name and original path for thumbnail naming
             if file_ext in IMAGE_EXTENSIONS:
                 with self.storage.get_file(sequence.middle_frame_path) as local_path:
-                    metadata = extractor_func(local_path, override_filename=sequence.base_name)
+                    # Pass pattern_path as original_path so show extraction and thumbnail naming work correctly
+                    metadata = extractor_func(local_path, override_filename=sequence.base_name, original_path=sequence.pattern_path)
                     if metadata:
                         metadata['file_path'] = sequence.middle_frame_path
                         metadata['file_name'] = os.path.basename(sequence.middle_frame_path)
@@ -344,8 +348,10 @@ class FileScanner:
                         self.stats['spreadsheet_files'] += 1
                     elif file_type == 'document':
                         self.stats['documents'] += 1
-                    else:
-                        self.stats['other_files'] += 1
+                    elif file_type == 'cache':
+                        self.stats['cache_files'] += 1
+                    elif file_type == 'unknown':
+                        self.stats['unknown_files'] += 1
                 
                 logger.info(f"Sequence processed: {sequence.base_name} (total size: {total_size / (1024**2):.2f} MB)")
         
@@ -405,9 +411,9 @@ class FileScanner:
                     self.stats['cache_files'] += 1
                 
             else:
-                metadata = self._process_with_storage(file_path, extract_unknown_metadata, 'other')
+                metadata = self._process_with_storage(file_path, extract_unknown_metadata, 'unknown')
                 with self.stats_lock:
-                    self.stats['other_files'] += 1
+                    self.stats['unknown_files'] += 1
             
             
             # logger.info(f"Debug Metadata: {metadata}")
@@ -452,7 +458,11 @@ class FileScanner:
         # Use context manager to get local file path
         # For S3, this downloads to temp; for local, returns path directly
         with self.storage.get_file(file_path) as local_path:
-            metadata = extractor_func(local_path)
+            # For image files, pass the original path so show extraction works correctly
+            if file_type == 'image':
+                metadata = extractor_func(local_path, original_path=file_path)
+            else:
+                metadata = extractor_func(local_path)
             
             # Ensure file_path in metadata is the original path (not temp path)
             if metadata:
@@ -479,9 +489,9 @@ class FileScanner:
                 if 'extension' not in metadata:
                     metadata['extension'] = Path(file_path).suffix.lower()
                 if 'created_date' not in metadata and os.path.exists(local_path):
-                    metadata['created_date'] = datetime.fromtimestamp(os.path.getctime(local_path))
+                    metadata['created_date'] = truncate_microseconds(datetime.fromtimestamp(os.path.getctime(local_path)))
                 if 'modified_date' not in metadata and os.path.exists(local_path):
-                    metadata['modified_date'] = datetime.fromtimestamp(os.path.getmtime(local_path))
+                    metadata['modified_date'] = truncate_microseconds(datetime.fromtimestamp(os.path.getmtime(local_path)))
                 
                 # Upload thumbnail to S3 if it exists (when using S3 storage)
                 thumbnail_path = metadata.get('thumbnail_path')
@@ -603,7 +613,8 @@ class FileScanner:
         logger.info(f"  - Code files: {self.stats['code_files']}")
         logger.info(f"  - Spreadsheets: {self.stats['spreadsheet_files']}")
         logger.info(f"  - Documents: {self.stats['documents']}")
-        logger.info(f"  - Other files: {self.stats['other_files']}")
+        logger.info(f"  - Cache files: {self.stats['cache_files']}")
+        logger.info(f"  - Unknown files: {self.stats['unknown_files']}")
         logger.info(f"Errors: {self.stats['errors']}")
         logger.info(f"Skipped: {self.stats['skipped']}")
         logger.info(f"Sequence Files: {self.stats['sequences']}")

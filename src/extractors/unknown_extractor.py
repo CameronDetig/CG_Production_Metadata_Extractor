@@ -4,6 +4,7 @@ Metadata extractor for any unknown file types
 import os
 from pathlib import Path
 from datetime import datetime
+from .utils.metadata_utils import truncate_microseconds
 
 
 def extract_unknown_metadata(file_path):
@@ -14,9 +15,9 @@ def extract_unknown_metadata(file_path):
         'file_path': file_path,
         'file_name': os.path.basename(file_path),
         'file_size': os.path.getsize(file_path),
-        'file_type': 'other',
-        'modified_date': datetime.fromtimestamp(os.path.getmtime(file_path)),
-        'created_date': datetime.fromtimestamp(os.path.getctime(file_path)),
+        'file_type': 'unknown',
+        'modified_date': truncate_microseconds(datetime.fromtimestamp(os.path.getmtime(file_path))),
+        'created_date': truncate_microseconds(datetime.fromtimestamp(os.path.getctime(file_path))),
     }
     
     try:

@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image
 from datetime import datetime
 from .utils.thumbnail_utils import create_image_thumbnail
-from .utils.metadata_utils import extract_show_from_path, extract_path_from_show
+from .utils.metadata_utils import extract_show_from_path, extract_path_from_show, truncate_microseconds
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -158,13 +158,16 @@ def _extract_exr_metadata(file_path):
         return {'error': error_msg}
 
 
-def extract_image_metadata(file_path, override_filename=None):
+def extract_image_metadata(file_path, override_filename=None, original_path=None):
     """Extract metadata from image files
     
     Args:
-        file_path: Path to the image file
+        file_path: Path to the image file (may be temp path for S3 files)
         override_filename: Optional filename to use for thumbnail (e.g., sequence pattern name)
+        original_path: Original file path (S3 URI or original local path) for show extraction
     """
+    # Use original_path for show/thumbnail naming if provided, otherwise use file_path
+    path_for_naming = original_path if original_path else file_path
     file_path_obj = Path(file_path)
     
     metadata = {
@@ -172,8 +175,8 @@ def extract_image_metadata(file_path, override_filename=None):
         'file_name': os.path.basename(file_path),
         'file_size': os.path.getsize(file_path),
         'file_type': 'image',
-        'modified_date': datetime.fromtimestamp(os.path.getmtime(file_path)),
-        'created_date': datetime.fromtimestamp(os.path.getctime(file_path)),
+        'modified_date': truncate_microseconds(datetime.fromtimestamp(os.path.getmtime(file_path))),
+        'created_date': truncate_microseconds(datetime.fromtimestamp(os.path.getctime(file_path))),
     }
     
     try:
@@ -248,21 +251,38 @@ def extract_image_metadata(file_path, override_filename=None):
             # Use configurable thumbnail directory (defaults to ./cg-production-data-thumbnails)
             thumbnail_base_path = os.getenv('THUMBNAIL_PATH', './cg-production-data-thumbnails')
             
-            # Determine show folder
-            show_name = extract_show_from_path(file_path)
+            # Determine show folder using original path (for S3 files)
+            show_name = extract_show_from_path(path_for_naming)
             show_folder = f"shows/{show_name}" if show_name else 'other'
             
             thumbnail_base = Path(thumbnail_base_path) / show_folder / 'image'
             thumbnail_base.mkdir(parents=True, exist_ok=True)
             
-            # Use override_filename for sequences, otherwise use full path from show
+            # Generate thumbnail name using full path from show name onwards
+            # For sequences, override_filename contains the pattern name (e.g., 'bullet.[001-006].png')
+            # We need to build the full path: show_subfolder_pattern_name
             if override_filename:
-                # For sequences, use the pattern name
-                base_name = Path(override_filename).stem
+                # For sequences: get directory path and append pattern name
+                # path_for_naming is the pattern path (e.g., .../gunflash/bullet.[001-006].png)
+                # We need the directory path, then append the pattern
+                dir_path = str(Path(path_for_naming).parent)
+                dir_path_from_show = extract_path_from_show(dir_path + "/dummy.tmp", show_name)
+                # Remove the 'dummy' we added
+                dir_path_from_show = dir_path_from_show.rsplit('_', 1)[0] if '_' in dir_path_from_show else ""
+                
+                # Get pattern name and clean it for filename
+                pattern_stem = Path(override_filename).stem
+                pattern_clean = pattern_stem.replace('.', '_').replace(' ', '_')
+                
+                # Combine directory path and pattern name
+                if dir_path_from_show:
+                    base_name = f"{dir_path_from_show}_{pattern_clean}"
+                else:
+                    base_name = pattern_clean
             else:
                 # For regular files, use full path from show name onwards
                 # This creates names like: charge_story_and_editorial_..._filename
-                base_name = extract_path_from_show(file_path, show_name)
+                base_name = extract_path_from_show(path_for_naming, show_name)
             thumbnail_path = thumbnail_base / f"{base_name}_thumb.jpg"
             
             # Skip thumbnail generation for .odg (requires LibreOffice)

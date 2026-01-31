@@ -4,6 +4,28 @@ Utility functions for metadata extraction
 import re
 from typing import Optional
 from pathlib import Path
+from datetime import datetime
+
+
+def truncate_microseconds(dt: datetime) -> datetime:
+    """
+    Truncate microseconds from a datetime object.
+    
+    Args:
+        dt: datetime object with potential microseconds
+        
+    Returns:
+        datetime object with microseconds set to 0
+        
+    Examples:
+        >>> from datetime import datetime
+        >>> dt = datetime(2026, 1, 29, 16, 36, 12, 298924)
+        >>> truncate_microseconds(dt)
+        datetime(2026, 1, 29, 16, 36, 12)
+    """
+    if dt is None:
+        return None
+    return dt.replace(microsecond=0)
 
 
 def extract_show_from_path(file_path: str) -> Optional[str]:
