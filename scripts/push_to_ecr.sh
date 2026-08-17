@@ -68,6 +68,36 @@ echo "Ensuring ECR repository exists..."
 aws ecr describe-repositories --repository-names "$REPO_NAME" --region "$REGION" 2>/dev/null || \
     aws ecr create-repository --repository-name "$REPO_NAME" --region "$REGION"
 
+# Ensure a lifecycle policy is in place so old versions don't accumulate indefinitely
+# (keeps the 3 most recent tagged images, expires untagged images after 1 day)
+echo "Ensuring ECR lifecycle policy is applied..."
+aws ecr put-lifecycle-policy --repository-name "$REPO_NAME" --region "$REGION" --lifecycle-policy-text '{
+  "rules": [
+    {
+      "rulePriority": 1,
+      "description": "Keep only the 3 most recent tagged images",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPrefixList": ["v"],
+        "countType": "imageCountMoreThan",
+        "countNumber": 3
+      },
+      "action": { "type": "expire" }
+    },
+    {
+      "rulePriority": 2,
+      "description": "Expire untagged images after 1 day",
+      "selection": {
+        "tagStatus": "untagged",
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": 1
+      },
+      "action": { "type": "expire" }
+    }
+  ]
+}' > /dev/null
+
 # Auto-detect next version if no tag specified
 if [ "$AUTO_VERSION" = true ]; then
     echo ""
@@ -120,7 +150,10 @@ aws ecr get-login-password --region "$REGION" | docker login --username AWS --pa
 # Build the Docker image
 echo ""
 echo "Building Docker image..."
-docker build --pull=false -t "$REPO_NAME:$TAG" .   
+docker build --pull=false --provenance=false -t "$REPO_NAME:$TAG" .
+# --provenance=false stops Buildx from attaching a build-provenance attestation manifest to
+# every push (Buildx >=0.10 default). Without it, each push creates 3 objects in ECR instead
+# of 1 (the tagged image index + an untagged full-size manifest + a tiny attestation manifest).
 # The --pull=false flag prevents Docker from trying to pull the latest ubuntu image and instead used the cached version
 
 # Tag for ECR (versioned tag)

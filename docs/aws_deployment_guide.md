@@ -96,9 +96,11 @@ Make sure you have docker installed and running: https://www.docker.com/
    - Master password: (create a password and save for use later)
    - Select instance size (e.g., burstable classes: db.t4g.micro for testing)
    - VPC: Default or custom (if you have a custom VPC, make sure to select it)
-   - Public access: No (for security)
-   - RDS Data API: enable
+   - Public access: No (for security and to avoid the ~$3.60/month AWS charge for an in-use public IPv4 address)
 7. Create database
+
+> [!NOTE]
+> **Connecting locally without public access:** Batch jobs and the chatbot Lambda already reach the database over their VPC security groups. For ad-hoc access from your laptop (e.g. pgAdmin), use an SSH tunnel through a bastion/EC2 instance in the same VPC, AWS Systems Manager Session Manager port forwarding, or temporarily re-enable public access for the session and disable it again afterward.
 
 
 To make it easier to connect to the database from your local machine, you can set the public access setting to "publicly available".
@@ -205,6 +207,11 @@ This will allows the batch process access to the s3 container with the files.
                 "logs:PutLogEvents"
             ],
             "Resource": "arn:aws:logs:*:*:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "secretsmanager:GetSecretValue",
+            "Resource": "arn:aws:secretsmanager:us-east-1:<account-id>:secret:cg-metadata-db/database-url-*"
         }
     ]
 }
@@ -214,6 +221,7 @@ This will allows the batch process access to the s3 container with the files.
 > **Bucket Configuration:**
 > - The first statement allows **read access** to your production files bucket
 > - The second statement allows **write access** to upload thumbnails to a separate bucket with public-read ACL for CDN access
+> - The third statement lets the job read the `DATABASE_URL` secret at container start (see Step 5) — scoped to that one secret only, not `secretsmanager:*`
 
 
 ### Create IAM Role
@@ -264,8 +272,10 @@ This will allows the batch process access to the s3 container with the files.
    - Platform: EC2 or Fargate
    - Execution role: `CGMetadataExtractorRole`
    - Image: `<account-id>.dkr.ecr.us-east-1.amazonaws.com/cg-metadata-extractor:latest`
-   - vCPUs: 2
-   - Memory: 16 GB
+   - vCPUs: 2, Memory: 16 GB — a reasonable **starting point** for a fresh setup.
+
+     > [!NOTE]
+     > **Current live config is 8 vCPU / 52 GB** (job definition revision 35, up from 2 vCPU/4GB at revision 1). It was bumped repeatedly over ~34 revisions, most likely to fix out-of-memory failures on large `.blend` files. Fargate bills per vCPU/GB-hour *per job run*, so an oversized job definition costs more every time it runs even though there's no idle cost between runs. Nobody has gone back to check whether recent jobs actually need that much — worth profiling actual peak memory usage (CloudWatch Container Insights, or just watch a run) before the next scan, and stepping the size back down if there's headroom.
    - Add Environment variables:
      ```
      STORAGE_TYPE=s3
@@ -296,9 +306,6 @@ This will allows the batch process access to the s3 container with the files.
      THUMBNAIL_BUCKET_NAME=cg-thumbnails-bucket-name
      
      AWS_REGION=us-east-1
-
-                      # use the password you made earlier for the database
-     DATABASE_URL=postgresql://postgres:<your-db-password>@<your-database-write-endpoint>:5432/postgres
      LOG_LEVEL=INFO
 
                       # Resume support: skip files already in database (useful if job crashes partway through)
@@ -309,9 +316,19 @@ This will allows the batch process access to the s3 container with the files.
                       # .blend files are always processed sequentially to avoid memory issues
      SCANNER_WORKERS=4
      ```
+   - Add `DATABASE_URL` as a **secret**, not a plain environment variable (see below).
 
-> [!WARNING]
-> **Security Best Practice**: Store the `DATABASE_URL` in AWS Secrets Manager and reference it in the job definition instead of hardcoding credentials.
+> [!IMPORTANT]
+> **`DATABASE_URL` must be injected from Secrets Manager, not hardcoded.** The live job definition previously had the full `postgresql://user:password@...` connection string sitting in plaintext in its environment variables — visible to anyone with `batch:DescribeJobDefinitions` permission. This is now fixed:
+> 1. The secret is stored in Secrets Manager as `cg-metadata-db/database-url`, as JSON key-value pairs (readable in the console's "Key/value pairs" view, same shape RDS-managed secrets use): `username`, `password`, `host`, `port`, `dbname`, `engine`, plus a `url` field holding the full assembled connection string.
+> 2. `CGMetadataExtractorPolicy` grants the job/execution role `secretsmanager:GetSecretValue` scoped to just that one secret ARN. (IAM authorization only cares about the base secret ARN — the JSON-key/version suffix below doesn't need to be, and isn't, part of the policy's resource pattern.)
+> 3. The job definition references only the `url` key via the `secrets` field's JSON-key suffix, so the container's `DATABASE_URL` env var receives just the connection string, not the whole JSON blob:
+>    ```json
+>    "secrets": [
+>      { "name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:us-east-1:<account-id>:secret:cg-metadata-db/database-url-XXXXXX:url::" }
+>    ]
+>    ```
+> If the database password ever changes, update the secret's value in Secrets Manager (`aws secretsmanager put-secret-value`, keeping the same JSON shape) — no job definition change needed, since it's resolved at container start.
 
 In the command prompts box, either delete the default "hello world" command, or replace it with the command to run the scanner file (CMD ["python3", "scanner.py"]).
 
@@ -481,14 +498,19 @@ aws logs tail /aws/batch/job --follow
 
 ## Cost Optimization
 
-- Use Spot instances in compute environment (up to 90% savings)
-- Set Min vCPUs to 0 (scales down when idle)
-- Use appropriate instance types (don't over-provision)
-- Monitor CloudWatch metrics for optimization opportunities
+Batch runs on Fargate, so there's no idle compute cost between job runs — you only pay per job execution. As of this writing, the account-wide cost drivers (verified against the live account) were:
+
+- **RDS (`cg-metadata-db`, db.t4g.micro/gp3)**: the largest fixed cost. Already the cheapest viable burstable instance class; shared with the chatbot Lambda, so it can't be scaled down further without affecting that service too.
+- **S3 (`cg-production-data`)**: scales with how much production data is stored. An Intelligent-Tiering lifecycle rule is applied so infrequently-accessed objects automatically move to a cheaper tier with no retrieval fees.
+- **ECR image storage**: container image versions accumulate on every push. A lifecycle policy (see `scripts/push_to_ecr.sh`) keeps only the 3 most recent tagged versions and expires untagged/orphaned images after 1 day.
+- **RDS public IPv4 address**: AWS charges ~$0.005/hr for any in-use public IPv4 address. The database no longer has `PubliclyAccessible` set, which removes this charge — see the note in Step 1 for how to still connect locally when needed.
+- **CloudWatch log retention**: `/aws/batch/job` previously had no expiration (logs kept forever). Retention is now set to 30 days.
+
+Further opportunities, not yet applied: right-sizing the job definition's vCPU/memory (it has grown to 8 vCPU / 52GB over many revisions — worth checking whether recent jobs actually need that much before the next bump), and using Fargate Spot for the compute environment if occasional job interruption/retry is acceptable.
 
 ## Security Best Practices
 
-1. **Never hardcode credentials** - Use IAM roles and Secrets Manager
+1. **Never hardcode credentials** - Use IAM roles and Secrets Manager. `DATABASE_URL` is injected via Secrets Manager (see Step 5) rather than hardcoded in the job definition.
 2. **Enable VPC** - Run Batch and RDS in private subnets
 3. **Encrypt data** - Enable encryption at rest for RDS and S3
 4. **Least privilege** - Grant only necessary IAM permissions
