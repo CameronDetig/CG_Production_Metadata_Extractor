@@ -9,6 +9,7 @@ dist/
 build/
 
 # production data
+asset_downloader/
 cg-production-data/
 cg-production-data-thumbnails/
 

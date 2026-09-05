@@ -2,6 +2,18 @@
 
 A containerized application that runs on AWS to extract metadata from an S3 bucket and store it in a database.
 
+## Asset ingestion
+
+The Blender Studio downloader and S3 unzip helper now live in `asset_downloader/` in this repository. They remain separate tools; the scanner container does not include the downloader.
+
+From this repository root, install the lightweight downloader dependencies with `python -m pip install -r asset_downloader/requirements.txt`. Add `USER_COOKIE` to the root `.env` using `asset_downloader/.env.example` as a template without overwriting existing settings. Then run:
+
+```powershell
+python asset_downloader/download_assets.py <gallery-url> --dir cg-production-data/shows/<project>
+```
+
+Replace the placeholders with a Blender Studio gallery URL and project name. Match scanner `DATA_PATH` to the output directory; Compose currently scans `/app/cg-production-data/shows/sintel/`. Downloading does not automatically upload, unpack, or scan assets. See the [downloader guide](asset_downloader/README.md) for configuration, attribution, S3 unpacking, and snapshot provenance.
+
 ## Overview
 
 This containerized application extracts metadata from production files including:
