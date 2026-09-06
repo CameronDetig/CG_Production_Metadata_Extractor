@@ -1,0 +1,136 @@
+{
+  "import": [
+    {
+      "to": "aws_ecr_repository.application",
+      "id": "cg-metadata-extractor"
+    },
+    {
+      "to": "aws_ecr_lifecycle_policy.application",
+      "id": "cg-metadata-extractor"
+    },
+    {
+      "to": "aws_vpc.production",
+      "id": "vpc-04bb7be45c9d6b7f7"
+    },
+    {
+      "to": "aws_subnet.us_east_1c",
+      "id": "subnet-068dbe005b3b31383"
+    },
+    {
+      "to": "aws_subnet.us_east_1e",
+      "id": "subnet-0c1279d57d6837bdf"
+    },
+    {
+      "to": "aws_subnet.us_east_1b",
+      "id": "subnet-066e1c28b3e38624e"
+    },
+    {
+      "to": "aws_subnet.us_east_1a",
+      "id": "subnet-048d6ffc3b5232b64"
+    },
+    {
+      "to": "aws_subnet.us_east_1f",
+      "id": "subnet-079e45b681c5b8eef"
+    },
+    {
+      "to": "aws_subnet.us_east_1d",
+      "id": "subnet-0edcbe2b0d8b9d291"
+    },
+    {
+      "to": "aws_route_table.production",
+      "id": "rtb-062ac8a250f1585ce"
+    },
+    {
+      "to": "aws_internet_gateway.production",
+      "id": "igw-0aeac8f9ebd5d5aad"
+    },
+    {
+      "to": "aws_security_group.batch",
+      "id": "sg-0b84f22c177e4ec4a"
+    },
+    {
+      "to": "aws_security_group.database",
+      "id": "sg-0b0227fe8f2b2e60f"
+    },
+    {
+      "to": "aws_security_group.assistant",
+      "id": "sg-0412872e9f94acb2b"
+    },
+    {
+      "to": "aws_db_subnet_group.production",
+      "id": "default-vpc-04bb7be45c9d6b7f7"
+    },
+    {
+      "to": "aws_db_instance.metadata",
+      "id": "cg-metadata-db"
+    },
+    {
+      "to": "aws_s3_bucket.assets",
+      "id": "cg-production-data"
+    },
+    {
+      "to": "aws_s3_bucket_server_side_encryption_configuration.assets",
+      "id": "cg-production-data"
+    },
+    {
+      "to": "aws_s3_bucket_public_access_block.assets",
+      "id": "cg-production-data"
+    },
+    {
+      "to": "aws_s3_bucket_lifecycle_configuration.assets",
+      "id": "cg-production-data"
+    },
+    {
+      "to": "aws_s3_bucket.thumbnails",
+      "id": "cg-production-data-thumbnails"
+    },
+    {
+      "to": "aws_s3_bucket_server_side_encryption_configuration.thumbnails",
+      "id": "cg-production-data-thumbnails"
+    },
+    {
+      "to": "aws_s3_bucket_public_access_block.thumbnails",
+      "id": "cg-production-data-thumbnails"
+    },
+    {
+      "to": "aws_s3_bucket_policy.thumbnails",
+      "id": "cg-production-data-thumbnails"
+    },
+    {
+      "to": "aws_secretsmanager_secret.database",
+      "id": "arn:aws:secretsmanager:us-east-1:001879457662:secret:cg-metadata-db/database-url-RZ9Ox9"
+    },
+    {
+      "to": "aws_batch_compute_environment.extractor",
+      "id": "arn:aws:batch:us-east-1:001879457662:compute-environment/cg-metadata-compute"
+    },
+    {
+      "to": "aws_batch_job_queue.extractor",
+      "id": "arn:aws:batch:us-east-1:001879457662:job-queue/cg-metadata-queue"
+    },
+    {
+      "to": "aws_batch_job_definition.extractor",
+      "id": "arn:aws:batch:us-east-1:001879457662:job-definition/cg-metadata-job:36"
+    },
+    {
+      "to": "aws_iam_role.extractor",
+      "id": "CGMetadataExtractorRole"
+    },
+    {
+      "to": "aws_iam_role_policy_attachment.extractor_AmazonECSTaskExecutionRolePolicy",
+      "id": "CGMetadataExtractorRole/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+    },
+    {
+      "to": "aws_iam_role_policy_attachment.extractor_CGMetadataExtractorPolicy",
+      "id": "CGMetadataExtractorRole/arn:aws:iam::001879457662:policy/CGMetadataExtractorPolicy"
+    },
+    {
+      "to": "aws_iam_policy.extractor_CGMetadataExtractorPolicy",
+      "id": "arn:aws:iam::001879457662:policy/CGMetadataExtractorPolicy"
+    },
+    {
+      "to": "aws_cloudwatch_log_group.application",
+      "id": "/aws/batch/job"
+    }
+  ]
+}

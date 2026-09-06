@@ -1,3 +1,5 @@
+> Historical manual setup reference. Use the [Terraform adoption and release guide](../infra/README.md) for current deployment. Live configuration is recorded in `infra/INVENTORY.md`; older settings below may differ.
+
 # AWS Deployment Guide
 
 This guide covers deploying the CG Production Metadata Extractor to AWS Batch with S3 storage and RDS PostgreSQL database.

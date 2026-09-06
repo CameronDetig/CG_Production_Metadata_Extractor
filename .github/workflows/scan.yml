@@ -1,0 +1,36 @@
+name: Submit metadata scan
+on:
+  workflow_dispatch:
+    inputs:
+      s3_prefix:
+        description: 'Non-empty prefix under the production asset bucket, e.g. shows/sintel/'
+        required: true
+        type: string
+      job_definition:
+        description: 'Exact reviewed cg-metadata-job revision, e.g. cg-metadata-job:36'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: submit-production-scan
+  cancel-in-progress: false
+jobs:
+  submit:
+    if: github.ref == 'refs/heads/main'
+    environment: production-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::001879457662:role/github-cg-extractor-scan
+          aws-region: us-east-1
+      - name: Submit explicitly selected scan
+        env:
+          SCAN_PREFIX: ${{ inputs.s3_prefix }}
+          JOB_DEFINITION: ${{ inputs.job_definition }}
+        run: python infra/tools/scan.py

@@ -8,3 +8,14 @@ postgres_data/
 output/
 .DS_Store
 __pycache__
+
+# Terraform local state, plans, credentials, and generated adoption material.
+**/.terraform/
+**/.private/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+!*.example.tfvars
+crash.log

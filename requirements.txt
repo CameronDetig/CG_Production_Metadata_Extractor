@@ -21,8 +21,10 @@ pgvector>=0.2.0
 # Local Embedding models
 sentence-transformers>=2.2.0
 transformers>=4.30.0
-torch>=2.0.0
-torchvision>=0.15.0
+# AWS Batch Fargate has no GPU. Pin CPU wheels so builds do not download CUDA libraries.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+torchvision==0.20.1+cpu
 
 # CLIP dependencies
 ftfy>=6.1.0

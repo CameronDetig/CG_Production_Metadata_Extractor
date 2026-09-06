@@ -8,6 +8,8 @@
 
 ## Build, Test, and Development Commands
 
+`infra/` owns production AWS resources and the shared SSM contract. See `infra/README.md` for import/bootstrap steps. Main-branch changes create a release plan; `Approve production release` applies a reviewed plan. Scans use a separate manual workflow. Do not use retired direct deployment scripts or depend on the parent repository for releases.
+
 Run these commands from this submodule's root:
 
 - `python -m pip install -r asset_downloader/requirements.txt` installs downloader-only dependencies. Run `python asset_downloader/download_assets.py <gallery-url> --dir cg-production-data/shows/<project>` with `USER_COOKIE` in the root `.env`; align scanner `DATA_PATH` with that directory. Downloading, unpacking, and scanning remain separate steps.

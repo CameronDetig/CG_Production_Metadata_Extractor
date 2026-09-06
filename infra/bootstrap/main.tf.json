@@ -1,0 +1,167 @@
+{
+  "resource": {
+    "aws_s3_bucket": {
+      "terraform": {
+        "bucket": "cg-extractor-terraform-001879457662-us-east-1",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      }
+    },
+    "aws_s3_bucket_versioning": {
+      "terraform": {
+        "bucket": "${aws_s3_bucket.terraform.id}",
+        "versioning_configuration": [
+          {
+            "status": "Enabled"
+          }
+        ]
+      }
+    },
+    "aws_s3_bucket_server_side_encryption_configuration": {
+      "terraform": {
+        "bucket": "${aws_s3_bucket.terraform.id}",
+        "rule": [
+          {
+            "apply_server_side_encryption_by_default": [
+              {
+                "sse_algorithm": "AES256"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "aws_s3_bucket_public_access_block": {
+      "terraform": {
+        "bucket": "${aws_s3_bucket.terraform.id}",
+        "block_public_acls": true,
+        "block_public_policy": true,
+        "ignore_public_acls": true,
+        "restrict_public_buckets": true
+      }
+    },
+    "aws_s3_bucket_policy": {
+      "terraform": {
+        "bucket": "${aws_s3_bucket.terraform.id}",
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Deny\", \"Principal\": \"*\", \"Action\": \"s3:*\", \"Resource\": [\"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1\", \"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1/*\"], \"Condition\": {\"Bool\": {\"aws:SecureTransport\": \"false\"}}}]}"
+      }
+    },
+    "aws_s3_bucket_lifecycle_configuration": {
+      "plans": {
+        "bucket": "${aws_s3_bucket.terraform.id}",
+        "depends_on": [
+          "aws_s3_bucket_versioning.terraform"
+        ],
+        "rule": [
+          {
+            "id": "expire-private-plans",
+            "status": "Enabled",
+            "filter": [
+              {
+                "prefix": "plans/"
+              }
+            ],
+            "expiration": [
+              {
+                "days": 2
+              }
+            ],
+            "noncurrent_version_expiration": [
+              {
+                "noncurrent_days": 2
+              }
+            ],
+            "abort_incomplete_multipart_upload": [
+              {
+                "days_after_initiation": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "aws_iam_role": {
+      "build": {
+        "name": "github-cg-extractor-build",
+        "assume_role_policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Principal\": {\"Federated\": \"arn:aws:iam::001879457662:oidc-provider/token.actions.githubusercontent.com\"}, \"Action\": \"sts:AssumeRoleWithWebIdentity\", \"Condition\": {\"StringEquals\": {\"token.actions.githubusercontent.com:aud\": \"sts.amazonaws.com\", \"token.actions.githubusercontent.com:sub\": \"repo:CameronDetig/CG_Production_Metadata_Extractor:ref:refs/heads/main\"}}}]}",
+        "max_session_duration": 3600
+      },
+      "plan": {
+        "name": "github-cg-extractor-plan",
+        "assume_role_policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Principal\": {\"Federated\": \"arn:aws:iam::001879457662:oidc-provider/token.actions.githubusercontent.com\"}, \"Action\": \"sts:AssumeRoleWithWebIdentity\", \"Condition\": {\"StringEquals\": {\"token.actions.githubusercontent.com:aud\": \"sts.amazonaws.com\", \"token.actions.githubusercontent.com:sub\": \"repo:CameronDetig/CG_Production_Metadata_Extractor:ref:refs/heads/main\"}}}]}",
+        "max_session_duration": 3600
+      },
+      "apply": {
+        "name": "github-cg-extractor-apply",
+        "assume_role_policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Principal\": {\"Federated\": \"arn:aws:iam::001879457662:oidc-provider/token.actions.githubusercontent.com\"}, \"Action\": \"sts:AssumeRoleWithWebIdentity\", \"Condition\": {\"StringEquals\": {\"token.actions.githubusercontent.com:aud\": \"sts.amazonaws.com\", \"token.actions.githubusercontent.com:sub\": \"repo:CameronDetig/CG_Production_Metadata_Extractor:environment:production\"}}}]}",
+        "max_session_duration": 3600
+      },
+      "scan": {
+        "name": "github-cg-extractor-scan",
+        "assume_role_policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Principal\": {\"Federated\": \"arn:aws:iam::001879457662:oidc-provider/token.actions.githubusercontent.com\"}, \"Action\": \"sts:AssumeRoleWithWebIdentity\", \"Condition\": {\"StringEquals\": {\"token.actions.githubusercontent.com:aud\": \"sts.amazonaws.com\", \"token.actions.githubusercontent.com:sub\": \"repo:CameronDetig/CG_Production_Metadata_Extractor:environment:production-scan\"}}}]}",
+        "max_session_duration": 3600
+      }
+    },
+    "aws_iam_policy": {
+      "build_0": {
+        "name": "github-cg-extractor-build-0",
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"ecr:GetAuthorizationToken\"], \"Resource\": \"*\"}, {\"Effect\": \"Allow\", \"Action\": [\"ecr:BatchCheckLayerAvailability\", \"ecr:InitiateLayerUpload\", \"ecr:UploadLayerPart\", \"ecr:CompleteLayerUpload\", \"ecr:PutImage\", \"ecr:DescribeImages\", \"ecr:BatchGetImage\", \"ecr:GetDownloadUrlForLayer\"], \"Resource\": \"arn:aws:ecr:us-east-1:001879457662:repository/cg-metadata-extractor\"}]}"
+      },
+      "plan_0": {
+        "name": "github-cg-extractor-plan-0",
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"ec2:Describe*\", \"rds:Describe*\", \"batch:Describe*\", \"batch:List*\", \"logs:Describe*\", \"logs:ListTagsForResource\", \"kms:DescribeKey\"], \"Resource\": \"*\"}, {\"Effect\": \"Allow\", \"Action\": [\"iam:GetRole\", \"iam:ListRolePolicies\", \"iam:ListAttachedRolePolicies\", \"iam:GetRolePolicy\", \"iam:GetPolicy\", \"iam:GetPolicyVersion\", \"iam:ListPolicyVersions\", \"iam:ListInstanceProfilesForRole\"], \"Resource\": [\"arn:aws:iam::001879457662:policy/CGMetadataExtractorPolicy\", \"arn:aws:iam::001879457662:role/CGMetadataExtractorRole\"]}, {\"Effect\": \"Allow\", \"Action\": [\"ecr:Describe*\", \"ecr:GetLifecyclePolicy\", \"ecr:GetRepositoryPolicy\", \"ecr:ListTagsForResource\"], \"Resource\": \"arn:aws:ecr:us-east-1:001879457662:repository/cg-metadata-extractor\"}, {\"Effect\": \"Allow\", \"Action\": [\"s3:GetBucket*\", \"s3:GetEncryptionConfiguration\", \"s3:GetLifecycleConfiguration\", \"s3:GetAccelerateConfiguration\", \"s3:GetReplicationConfiguration\", \"s3:GetBucketObjectLockConfiguration\", \"s3:ListBucket\"], \"Resource\": [\"arn:aws:s3:::cg-production-data\", \"arn:aws:s3:::cg-production-data-thumbnails\"]}, {\"Effect\": \"Allow\", \"Action\": [\"secretsmanager:DescribeSecret\", \"secretsmanager:GetResourcePolicy\"], \"Resource\": \"arn:aws:secretsmanager:us-east-1:001879457662:secret:cg-metadata-db/database-url-*\"}, {\"Effect\": \"Allow\", \"Action\": [\"ssm:GetParameter\", \"ssm:ListTagsForResource\"], \"Resource\": \"arn:aws:ssm:us-east-1:001879457662:parameter/cg-production/prod/shared/v1\"}, {\"Effect\": \"Allow\", \"Action\": [\"s3:ListBucket\", \"s3:GetBucketLocation\"], \"Resource\": \"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1\"}, {\"Effect\": \"Allow\", \"Action\": [\"s3:GetObject\"], \"Resource\": \"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1/state/production.tfstate\"}]}"
+      },
+      "plan_8": {
+        "name": "github-cg-extractor-plan-8",
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"s3:GetObject\", \"s3:PutObject\", \"s3:DeleteObject\"], \"Resource\": \"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1/state/production.tfstate.tflock\"}, {\"Effect\": \"Allow\", \"Action\": [\"s3:GetObject\", \"s3:PutObject\"], \"Resource\": \"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1/plans/*\"}]}"
+      },
+      "apply_0": {
+        "name": "github-cg-extractor-apply-0",
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"ec2:Describe*\", \"rds:Describe*\", \"batch:Describe*\", \"batch:List*\", \"logs:Describe*\", \"logs:ListTagsForResource\", \"kms:DescribeKey\"], \"Resource\": \"*\"}, {\"Effect\": \"Allow\", \"Action\": [\"iam:GetRole\", \"iam:ListRolePolicies\", \"iam:ListAttachedRolePolicies\", \"iam:GetRolePolicy\", \"iam:GetPolicy\", \"iam:GetPolicyVersion\", \"iam:ListPolicyVersions\", \"iam:ListInstanceProfilesForRole\"], \"Resource\": [\"arn:aws:iam::001879457662:policy/CGMetadataExtractorPolicy\", \"arn:aws:iam::001879457662:role/CGMetadataExtractorRole\"]}, {\"Effect\": \"Allow\", \"Action\": [\"ecr:Describe*\", \"ecr:GetLifecyclePolicy\", \"ecr:GetRepositoryPolicy\", \"ecr:ListTagsForResource\"], \"Resource\": \"arn:aws:ecr:us-east-1:001879457662:repository/cg-metadata-extractor\"}, {\"Effect\": \"Allow\", \"Action\": [\"s3:GetBucket*\", \"s3:GetEncryptionConfiguration\", \"s3:GetLifecycleConfiguration\", \"s3:GetAccelerateConfiguration\", \"s3:GetReplicationConfiguration\", \"s3:GetBucketObjectLockConfiguration\", \"s3:ListBucket\"], \"Resource\": [\"arn:aws:s3:::cg-production-data\", \"arn:aws:s3:::cg-production-data-thumbnails\"]}, {\"Effect\": \"Allow\", \"Action\": [\"secretsmanager:DescribeSecret\", \"secretsmanager:GetResourcePolicy\"], \"Resource\": \"arn:aws:secretsmanager:us-east-1:001879457662:secret:cg-metadata-db/database-url-*\"}, {\"Effect\": \"Allow\", \"Action\": [\"ssm:GetParameter\", \"ssm:ListTagsForResource\"], \"Resource\": \"arn:aws:ssm:us-east-1:001879457662:parameter/cg-production/prod/shared/v1\"}, {\"Effect\": \"Allow\", \"Action\": [\"s3:ListBucket\", \"s3:GetBucketLocation\"], \"Resource\": \"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1\"}, {\"Effect\": \"Allow\", \"Action\": [\"s3:GetObject\", \"s3:PutObject\"], \"Resource\": \"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1/state/production.tfstate\"}]}"
+      },
+      "apply_8": {
+        "name": "github-cg-extractor-apply-8",
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"s3:GetObject\", \"s3:PutObject\", \"s3:DeleteObject\"], \"Resource\": \"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1/state/production.tfstate.tflock\"}, {\"Effect\": \"Allow\", \"Action\": [\"s3:GetObject\"], \"Resource\": \"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1/plans/*\"}, {\"Effect\": \"Allow\", \"Action\": [\"iam:UpdateAssumeRolePolicy\", \"iam:UpdateRole\", \"iam:PutRolePolicy\", \"iam:DeleteRolePolicy\", \"iam:AttachRolePolicy\", \"iam:DetachRolePolicy\", \"iam:CreatePolicyVersion\", \"iam:DeletePolicyVersion\", \"iam:SetDefaultPolicyVersion\", \"iam:TagRole\", \"iam:UntagRole\", \"iam:TagPolicy\", \"iam:UntagPolicy\"], \"Resource\": [\"arn:aws:iam::001879457662:policy/CGMetadataExtractorPolicy\", \"arn:aws:iam::001879457662:role/CGMetadataExtractorRole\"]}, {\"Effect\": \"Allow\", \"Action\": [\"iam:PassRole\"], \"Resource\": [\"arn:aws:iam::001879457662:policy/CGMetadataExtractorPolicy\", \"arn:aws:iam::001879457662:role/CGMetadataExtractorRole\"], \"Condition\": {\"StringEquals\": {\"iam:PassedToService\": [\"lambda.amazonaws.com\", \"ecs-tasks.amazonaws.com\"]}}}, {\"Effect\": \"Allow\", \"Action\": [\"ecr:PutLifecyclePolicy\", \"ecr:SetRepositoryPolicy\", \"ecr:PutImageTagMutability\", \"ecr:PutImageScanningConfiguration\", \"ecr:TagResource\", \"ecr:UntagResource\"], \"Resource\": \"arn:aws:ecr:us-east-1:001879457662:repository/cg-metadata-extractor\"}, {\"Effect\": \"Allow\", \"Action\": [\"logs:PutRetentionPolicy\", \"logs:DeleteRetentionPolicy\", \"logs:TagResource\", \"logs:UntagResource\"], \"Resource\": \"arn:aws:logs:us-east-1:001879457662:log-group:/aws/batch/job*\"}, {\"Effect\": \"Allow\", \"Action\": [\"ec2:ModifyVpcAttribute\", \"ec2:ModifySubnetAttribute\", \"ec2:AuthorizeSecurityGroupIngress\", \"ec2:AuthorizeSecurityGroupEgress\", \"ec2:RevokeSecurityGroupIngress\", \"ec2:RevokeSecurityGroupEgress\", \"ec2:CreateRoute\", \"ec2:ReplaceRoute\", \"ec2:DeleteRoute\", \"ec2:CreateTags\", \"ec2:DeleteTags\"], \"Resource\": [\"arn:aws:ec2:us-east-1:001879457662:vpc/vpc-04bb7be45c9d6b7f7\", \"arn:aws:ec2:us-east-1:001879457662:subnet/subnet-068dbe005b3b31383\", \"arn:aws:ec2:us-east-1:001879457662:subnet/subnet-0c1279d57d6837bdf\", \"arn:aws:ec2:us-east-1:001879457662:subnet/subnet-066e1c28b3e38624e\", \"arn:aws:ec2:us-east-1:001879457662:subnet/subnet-048d6ffc3b5232b64\", \"arn:aws:ec2:us-east-1:001879457662:subnet/subnet-079e45b681c5b8eef\", \"arn:aws:ec2:us-east-1:001879457662:subnet/subnet-0edcbe2b0d8b9d291\", \"arn:aws:ec2:us-east-1:001879457662:route-table/rtb-062ac8a250f1585ce\", \"arn:aws:ec2:us-east-1:001879457662:internet-gateway/igw-0aeac8f9ebd5d5aad\", \"arn:aws:ec2:us-east-1:001879457662:security-group/sg-0b84f22c177e4ec4a\", \"arn:aws:ec2:us-east-1:001879457662:security-group/sg-0b0227fe8f2b2e60f\", \"arn:aws:ec2:us-east-1:001879457662:security-group/sg-0412872e9f94acb2b\"]}, {\"Effect\": \"Allow\", \"Action\": [\"rds:ModifyDBInstance\", \"rds:AddTagsToResource\", \"rds:RemoveTagsFromResource\"], \"Resource\": \"arn:aws:rds:us-east-1:001879457662:db:cg-metadata-db\"}]}"
+      },
+      "apply_16": {
+        "name": "github-cg-extractor-apply-16",
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"rds:ModifyDBSubnetGroup\"], \"Resource\": \"arn:aws:rds:us-east-1:001879457662:subgrp:default-vpc-04bb7be45c9d6b7f7\"}, {\"Effect\": \"Allow\", \"Action\": [\"s3:PutBucketPolicy\", \"s3:PutBucketPublicAccessBlock\", \"s3:PutEncryptionConfiguration\", \"s3:PutLifecycleConfiguration\", \"s3:PutBucketVersioning\", \"s3:PutBucketTagging\"], \"Resource\": [\"arn:aws:s3:::cg-production-data\", \"arn:aws:s3:::cg-production-data-thumbnails\"]}, {\"Effect\": \"Allow\", \"Action\": [\"secretsmanager:UpdateSecret\", \"secretsmanager:TagResource\", \"secretsmanager:UntagResource\"], \"Resource\": \"arn:aws:secretsmanager:us-east-1:001879457662:secret:cg-metadata-db/database-url-*\"}, {\"Effect\": \"Allow\", \"Action\": [\"ssm:PutParameter\", \"ssm:AddTagsToResource\", \"ssm:ListTagsForResource\"], \"Resource\": \"arn:aws:ssm:us-east-1:001879457662:parameter/cg-production/prod/shared/v1\"}, {\"Effect\": \"Allow\", \"Action\": [\"batch:RegisterJobDefinition\", \"batch:DeregisterJobDefinition\", \"batch:TagResource\", \"batch:UntagResource\"], \"Resource\": \"arn:aws:batch:us-east-1:001879457662:job-definition/cg-metadata-job:*\"}, {\"Effect\": \"Allow\", \"Action\": [\"batch:UpdateComputeEnvironment\"], \"Resource\": \"arn:aws:batch:us-east-1:001879457662:compute-environment/cg-metadata-compute\"}, {\"Effect\": \"Allow\", \"Action\": [\"batch:UpdateJobQueue\"], \"Resource\": \"arn:aws:batch:us-east-1:001879457662:job-queue/cg-metadata-queue\"}]}"
+      },
+      "scan_0": {
+        "name": "github-cg-extractor-scan-0",
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"batch:SubmitJob\"], \"Resource\": [\"arn:aws:batch:us-east-1:001879457662:job-definition/cg-metadata-job:*\", \"arn:aws:batch:us-east-1:001879457662:job-queue/cg-metadata-queue\"]}]}"
+      }
+    },
+    "aws_iam_role_policy_attachment": {
+      "build_0": {
+        "role": "${aws_iam_role.build.name}",
+        "policy_arn": "${aws_iam_policy.build_0.arn}"
+      },
+      "plan_0": {
+        "role": "${aws_iam_role.plan.name}",
+        "policy_arn": "${aws_iam_policy.plan_0.arn}"
+      },
+      "plan_8": {
+        "role": "${aws_iam_role.plan.name}",
+        "policy_arn": "${aws_iam_policy.plan_8.arn}"
+      },
+      "apply_0": {
+        "role": "${aws_iam_role.apply.name}",
+        "policy_arn": "${aws_iam_policy.apply_0.arn}"
+      },
+      "apply_8": {
+        "role": "${aws_iam_role.apply.name}",
+        "policy_arn": "${aws_iam_policy.apply_8.arn}"
+      },
+      "apply_16": {
+        "role": "${aws_iam_role.apply.name}",
+        "policy_arn": "${aws_iam_policy.apply_16.arn}"
+      },
+      "scan_0": {
+        "role": "${aws_iam_role.scan.name}",
+        "policy_arn": "${aws_iam_policy.scan_0.arn}"
+      }
+    }
+  }
+}

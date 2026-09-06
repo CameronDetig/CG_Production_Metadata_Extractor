@@ -1,0 +1,7 @@
+{
+  "component": "extractor",
+  "repository": "CameronDetig/CG_Production_Metadata_Extractor",
+  "workflow": ".github/workflows/release.yml",
+  "state_bucket": "cg-extractor-terraform-001879457662-us-east-1",
+  "ecr_uri": "001879457662.dkr.ecr.us-east-1.amazonaws.com/cg-metadata-extractor"
+}

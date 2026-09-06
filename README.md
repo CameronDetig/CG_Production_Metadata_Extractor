@@ -1,5 +1,7 @@
 # CG Production Metadata Extractor
 
+AWS infrastructure and independent releases are managed in [infra/](infra/README.md). The parent repository is not required.
+
 A containerized application that runs on AWS to extract metadata from an S3 bucket and store it in a database.
 
 ## Asset ingestion
