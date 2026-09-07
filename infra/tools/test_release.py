@@ -1,5 +1,5 @@
 import unittest
-from release import object_key, plan_changes, validate_run, validate_manifest
+from release import object_key, plan_changes, terraform_plan_command, validate_run, validate_manifest
 
 
 class ReleaseSafetyTests(unittest.TestCase):
@@ -50,6 +50,12 @@ class ReleaseSafetyTests(unittest.TestCase):
                 validate_manifest(manifest, run, config, now)
         with self.assertRaises(ValueError):
             validate_manifest(manifest, {'head_sha': 'other'}, config, 101)
+
+    def test_release_plan_skips_refresh_outside_adoption(self):
+        runtime = 'runtime.tfvars.json'
+        saved = 'release.tfplan'
+        self.assertIn('-refresh=false', terraform_plan_command(runtime, saved, refresh=False))
+        self.assertNotIn('-refresh=false', terraform_plan_command(runtime, saved, refresh=True))
 
 
 if __name__ == '__main__':

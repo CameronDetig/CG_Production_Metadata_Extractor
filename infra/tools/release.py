@@ -87,6 +87,14 @@ def upload(bucket, key, source):
         '--body', str(source), '--server-side-encryption', 'AES256', '--if-none-match', '*')
 
 
+def terraform_plan_command(runtime, saved, *, refresh):
+    args = ['terraform', 'plan', '-input=false', '-lock-timeout=60s']
+    if not refresh:
+        args.append('-refresh=false')
+    args.extend([f'-var-file={runtime}', f'-out={saved}'])
+    return args
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['plan', 'verify', 'apply', 'smoke'])
@@ -158,7 +166,7 @@ def main():
     runtime.write_text(json.dumps(variables), encoding='utf-8')
     command(['terraform', 'init', '-input=false', '-lockfile=readonly', '-backend-config=backend.hcl'])
     saved = PRIVATE / 'release.tfplan'
-    command(['terraform', 'plan', '-input=false', '-lock-timeout=60s', f'-var-file={runtime}', f'-out={saved}'])
+    command(terraform_plan_command(runtime, saved, refresh=args.adoption))
     plan = command(['terraform', 'show', '-json', str(saved)], json_output=True)
     changes = plan_changes(plan, adoption=args.adoption)
     summary = json.dumps(changes, indent=2)
