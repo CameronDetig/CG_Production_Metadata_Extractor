@@ -1,4 +1,6 @@
+import json
 import unittest
+from pathlib import Path
 from release import object_key, plan_changes, terraform_plan_command, validate_run, validate_manifest
 
 
@@ -56,6 +58,16 @@ class ReleaseSafetyTests(unittest.TestCase):
         saved = 'release.tfplan'
         self.assertIn('-refresh=false', terraform_plan_command(runtime, saved, refresh=False))
         self.assertNotIn('-refresh=false', terraform_plan_command(runtime, saved, refresh=True))
+
+    def test_import_roles_can_read_resource_tags(self):
+        bootstrap = Path(__file__).resolve().parents[1] / 'bootstrap' / 'main.tf.json'
+        policies = json.loads(bootstrap.read_text(encoding='utf-8'))['resource']['aws_iam_policy']
+        for name in ['plan_0', 'apply_0']:
+            statements = json.loads(policies[name]['policy'])['Statement']
+            actions = {action for statement in statements for action in statement['Action']}
+            self.assertIn('rds:ListTagsForResource', actions)
+            self.assertIn('secretsmanager:ListTagsForResource', actions)
+            self.assertIn('secretsmanager:ListSecretVersionIds', actions)
 
 
 if __name__ == '__main__':
