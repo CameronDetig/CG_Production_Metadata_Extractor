@@ -1,7 +1,7 @@
 name: Infrastructure checks
 on:
   pull_request:
-    paths: ['infra/**', '.github/workflows/**', 'src/**', 'testing/**', 'Dockerfile', 'requirements.txt']
+    paths: ['infra/**', '.github/workflows/**', 'src/**', 'testing/**', 'scripts/fetch_blender_build_assets.ps1', 'Dockerfile', 'requirements.txt']
 permissions:
   contents: read
 jobs:

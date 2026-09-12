@@ -6,6 +6,7 @@ cg-production-data-thumbnails/
 db/
 postgres_data/
 output/
+build-assets/blender/
 .DS_Store
 __pycache__
 

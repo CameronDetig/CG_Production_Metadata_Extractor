@@ -21,7 +21,7 @@ python infra/tools/check_adoption.py
 
 `inventory.py` only reads AWS; it updates reviewable import IDs and stores raw, potentially secret-bearing material under ignored `.private/`. `check_adoption.py` copies source into a private local backend, runs plan, and rejects effective resource changes. It does not import into remote state or apply anything. Lambda can show one sensitivity-only environment update on first import: before/after values are identical. The checker verifies this rather than hiding environment drift with `ignore_changes`.
 
-The existing account-wide GitHub OIDC provider is referenced, not duplicated or owned by this stack. Bootstrap creates a dedicated encrypted/versioned bucket and separate build, plan, and apply roles. Only the apply role can write production state; neither CI role can access bootstrap state. The extractor additionally creates a scan role. Review before applying:
+The existing account-wide GitHub OIDC provider is referenced, not duplicated or owned by this stack. Bootstrap creates a dedicated encrypted/versioned Terraform bucket, a separate private Blender build-artifact bucket, and separate build, plan, and apply roles. The build role can read only the Blender artifact prefix and push the extractor image; only the apply role can write production state, and neither CI role can access bootstrap state. The extractor additionally creates a scan role. See [Blender build assets](../docs/blender_build_assets.md) for the one-time archive upload. Review before applying:
 
 ```powershell
 terraform -chdir=infra/bootstrap init
@@ -57,7 +57,7 @@ Adopt and release the extractor first. Its first reviewed normal release publish
 ## Release, review, and rollback
 
 1. Pull requests run Terraform validation and isolated release-guard tests without AWS credentials.
-2. Relevant main-branch pushes run checks and build changed application code as `sha-<commit>`. Infrastructure-only changes resolve the current deployed image. Builds use Linux AMD64 with Lambda-compatible manifest flags. A 25 GB free-disk check fails with guidance to select a larger runner if needed.
+2. Relevant main-branch pushes run checks and build changed application code as `sha-<commit>`. Infrastructure-only changes resolve the current deployed image. Builds fetch verified Blender archives from the private build-artifact bucket, then use Linux AMD64 with Lambda-compatible manifest flags. A 25 GB free-disk check fails with guidance to select a larger runner if needed.
 3. The plan role saves the binary plan privately in S3 under `plans/<run-id>/<attempt>/`, with a checksum/commit manifest. Logs contain a resource/action summary, not sensitive plan values. Review the complete plan locally with `terraform show` after downloading it using authorized AWS credentials. Do not post plan JSON publicly.
 4. Run **Approve production release** on main with the reviewed **plan run ID**. It verifies the successful source workflow, repository, event, branch, attempt, commit, checksum, and a 24-hour expiry. It checks out the plan commit and applies that exact saved plan. An expired plan or stale state requires a new plan and approval; apply never silently replans.
 5. The workflow verifies Lambda/Batch control-plane status. Complete the runtime checks below before treating the release as accepted.

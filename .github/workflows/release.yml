@@ -2,7 +2,7 @@ name: Plan extractor release
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'Dockerfile', 'requirements.txt', 'infra/**', '.github/workflows/**']
+    paths: ['src/**', 'scripts/fetch_blender_build_assets.ps1', 'Dockerfile', 'requirements.txt', 'infra/**', '.github/workflows/**']
   workflow_dispatch:
     inputs:
       image_digest:
@@ -23,6 +23,7 @@ env:
   AWS_DEFAULT_REGION: us-east-1
   TF_IN_AUTOMATION: 'true'
   ECR_URI: 001879457662.dkr.ecr.us-east-1.amazonaws.com/cg-metadata-extractor
+  BLENDER_ARTIFACT_BUCKET: cg-extractor-build-artifacts-001879457662-us-east-1
 jobs:
   build:
     if: github.ref == 'refs/heads/main'
@@ -57,7 +58,7 @@ jobs:
           if [ "$EVENT" = push ]; then
             if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
               changed=true
-            elif ! git diff --quiet "$BEFORE" "$GITHUB_SHA" -- src Dockerfile requirements.txt; then
+            elif ! git diff --quiet "$BEFORE" "$GITHUB_SHA" -- src scripts/fetch_blender_build_assets.ps1 Dockerfile requirements.txt; then
               changed=true
             fi
           fi
@@ -67,6 +68,10 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::001879457662:role/github-cg-extractor-build
           aws-region: us-east-1
+      - name: Fetch verified Blender build assets
+        if: steps.changes.outputs.build == 'true'
+        shell: pwsh
+        run: ./scripts/fetch_blender_build_assets.ps1 -BucketName $env:BLENDER_ARTIFACT_BUCKET
       - uses: aws-actions/amazon-ecr-login@v2
         if: steps.changes.outputs.build == 'true'
       - uses: docker/setup-buildx-action@v3

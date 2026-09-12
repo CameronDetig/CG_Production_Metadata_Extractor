@@ -50,28 +50,17 @@ COPY requirements.txt .
 # This expensive step is cached unless requirements.txt changes
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Download and install Blender 2.49b (very old files: 2.4x era - Big Buck Bunny)
-# This version is static and contains its own Python 2.6
-RUN wget -q https://download.blender.org/release/Blender2.49b/blender-2.49b-linux-glibc236-py26-x86_64.tar.bz2 \
+# Blender archives are fetched from the private build-artifact bucket before the
+# Docker build. Keeping AWS credentials outside BuildKit prevents them from being
+# captured in image layers. SHA256SUMS is generated when the artifacts are uploaded.
+COPY build-assets/blender/ /tmp/blender/
+RUN cd /tmp/blender \
+    && sha256sum --check SHA256SUMS \
     && tar -xf blender-2.49b-linux-glibc236-py26-x86_64.tar.bz2 -C /opt \
-    && rm blender-2.49b-linux-glibc236-py26-x86_64.tar.bz2
-
-# Download and install Blender 2.79b (legacy files: 2.5x - 2.7x)
-# Placed after pip install so Blender version changes don't invalidate pip cache
-RUN wget -q https://download.blender.org/release/Blender2.79/blender-2.79b-linux-glibc219-x86_64.tar.bz2 \
     && tar -xf blender-2.79b-linux-glibc219-x86_64.tar.bz2 -C /opt \
-    && rm blender-2.79b-linux-glibc219-x86_64.tar.bz2
-
-# Download and install Blender 3.6 LTS (bridge for 2.80+ and 3.x era)
-RUN wget -q https://download.blender.org/release/Blender3.6/blender-3.6.9-linux-x64.tar.xz \
     && tar -xf blender-3.6.9-linux-x64.tar.xz -C /opt \
-    && rm blender-3.6.9-linux-x64.tar.xz
-
-# Download and install Blender 4.5.5 LTS (modern files: 2.8+)
-# Placed AFTER pip install so Blender version changes don't invalidate pip cache
-RUN wget -q https://download.blender.org/release/Blender4.5/blender-4.5.5-linux-x64.tar.xz \
     && tar -xf blender-4.5.5-linux-x64.tar.xz -C /opt \
-    && rm blender-4.5.5-linux-x64.tar.xz \
+    && rm -rf /tmp/blender \
     && ln -s /opt/blender-4.5.5-linux-x64/blender /usr/local/bin/blender
 
 # Copy application code LAST

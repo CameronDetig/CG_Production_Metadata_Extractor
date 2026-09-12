@@ -6,11 +6,25 @@
         "lifecycle": {
           "prevent_destroy": true
         }
+      },
+      "blender_artifacts": {
+        "bucket": "cg-extractor-build-artifacts-001879457662-us-east-1",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
       }
     },
     "aws_s3_bucket_versioning": {
       "terraform": {
         "bucket": "${aws_s3_bucket.terraform.id}",
+        "versioning_configuration": [
+          {
+            "status": "Enabled"
+          }
+        ]
+      },
+      "blender_artifacts": {
+        "bucket": "${aws_s3_bucket.blender_artifacts.id}",
         "versioning_configuration": [
           {
             "status": "Enabled"
@@ -23,6 +37,26 @@
         "bucket": "${aws_s3_bucket.terraform.id}",
         "rule": [
           {
+            "blocked_encryption_types": [
+              "SSE-C"
+            ],
+            "bucket_key_enabled": false,
+            "apply_server_side_encryption_by_default": [
+              {
+                "sse_algorithm": "AES256"
+              }
+            ]
+          }
+        ]
+      },
+      "blender_artifacts": {
+        "bucket": "${aws_s3_bucket.blender_artifacts.id}",
+        "rule": [
+          {
+            "blocked_encryption_types": [
+              "SSE-C"
+            ],
+            "bucket_key_enabled": false,
             "apply_server_side_encryption_by_default": [
               {
                 "sse_algorithm": "AES256"
@@ -39,12 +73,33 @@
         "block_public_policy": true,
         "ignore_public_acls": true,
         "restrict_public_buckets": true
+      },
+      "blender_artifacts": {
+        "bucket": "${aws_s3_bucket.blender_artifacts.id}",
+        "block_public_acls": true,
+        "block_public_policy": true,
+        "ignore_public_acls": true,
+        "restrict_public_buckets": true
+      }
+    },
+    "aws_s3_bucket_ownership_controls": {
+      "blender_artifacts": {
+        "bucket": "${aws_s3_bucket.blender_artifacts.id}",
+        "rule": [
+          {
+            "object_ownership": "BucketOwnerEnforced"
+          }
+        ]
       }
     },
     "aws_s3_bucket_policy": {
       "terraform": {
         "bucket": "${aws_s3_bucket.terraform.id}",
         "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Deny\", \"Principal\": \"*\", \"Action\": \"s3:*\", \"Resource\": [\"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1\", \"arn:aws:s3:::cg-extractor-terraform-001879457662-us-east-1/*\"], \"Condition\": {\"Bool\": {\"aws:SecureTransport\": \"false\"}}}]}"
+      },
+      "blender_artifacts": {
+        "bucket": "${aws_s3_bucket.blender_artifacts.id}",
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Sid\": \"DenyInsecureTransport\", \"Effect\": \"Deny\", \"Principal\": \"*\", \"Action\": \"s3:*\", \"Resource\": [\"arn:aws:s3:::cg-extractor-build-artifacts-001879457662-us-east-1\", \"arn:aws:s3:::cg-extractor-build-artifacts-001879457662-us-east-1/*\"], \"Condition\": {\"Bool\": {\"aws:SecureTransport\": \"false\"}}}]}"
       }
     },
     "aws_s3_bucket_lifecycle_configuration": {
@@ -106,7 +161,7 @@
     "aws_iam_policy": {
       "build_0": {
         "name": "github-cg-extractor-build-0",
-        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"ecr:GetAuthorizationToken\"], \"Resource\": \"*\"}, {\"Effect\": \"Allow\", \"Action\": [\"ecr:BatchCheckLayerAvailability\", \"ecr:InitiateLayerUpload\", \"ecr:UploadLayerPart\", \"ecr:CompleteLayerUpload\", \"ecr:PutImage\", \"ecr:DescribeImages\", \"ecr:BatchGetImage\", \"ecr:GetDownloadUrlForLayer\"], \"Resource\": \"arn:aws:ecr:us-east-1:001879457662:repository/cg-metadata-extractor\"}]}"
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"ecr:GetAuthorizationToken\"], \"Resource\": \"*\"}, {\"Effect\": \"Allow\", \"Action\": [\"ecr:BatchCheckLayerAvailability\", \"ecr:InitiateLayerUpload\", \"ecr:UploadLayerPart\", \"ecr:CompleteLayerUpload\", \"ecr:PutImage\", \"ecr:DescribeImages\", \"ecr:BatchGetImage\", \"ecr:GetDownloadUrlForLayer\"], \"Resource\": \"arn:aws:ecr:us-east-1:001879457662:repository/cg-metadata-extractor\"}, {\"Effect\": \"Allow\", \"Action\": [\"s3:GetObject\"], \"Resource\": \"arn:aws:s3:::cg-extractor-build-artifacts-001879457662-us-east-1/blender/*\"}]}"
       },
       "plan_0": {
         "name": "github-cg-extractor-plan-0",
