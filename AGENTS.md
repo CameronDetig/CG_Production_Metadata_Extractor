@@ -8,7 +8,7 @@
 
 ## Build, Test, and Development Commands
 
-`infra/` owns production AWS resources and the shared SSM contract. See `infra/README.md` for import/bootstrap steps. Main-branch changes create a release plan; `Approve production release` applies a reviewed plan. Scans use a separate manual workflow. Do not use retired direct deployment scripts or depend on the parent repository for releases.
+`infra/` owns production AWS resources and the shared SSM contract. See `infra/README.md` for import/bootstrap steps and `docs/ci-cd.md` for the release flow, guards and failed-release troubleshooting. Main-branch changes create a release plan; `Approve production release` applies a reviewed plan. Scans use a separate manual workflow. Do not use retired direct deployment scripts or depend on the parent repository for releases.
 
 Run these commands from this submodule's root:
 
