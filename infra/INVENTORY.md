@@ -5,7 +5,7 @@ Source: read-only AWS CLI calls using the operator's `AdminUser` profile, accoun
 | Resource | Observed configuration | Owner |
 |---|---|---|
 | VPC `vpc-04bb7be45c9d6b7f7` | `172.30.0.0/16`, six /24 public subnets, one main route table and internet gateway; no VPC endpoints | Extractor |
-| RDS `cg-metadata-db` | PostgreSQL 17.9, db.t4g.micro, encrypted gp3 20 GB, autoscaling max 1000 GB, Single-AZ, **private**, one-day backups | Extractor |
+| RDS `cg-metadata-db` | PostgreSQL 17.9, db.t4g.micro, encrypted gp3 20 GB, autoscaling max 1000 GB, Single-AZ, **private** at adoption (made public with a password + SSL-only `0.0.0.0/0` rule on 2026-11-11), one-day backups | Extractor |
 | Production S3 | `cg-production-data`, `cg-production-data-thumbnails`; existing encryption/public-access/lifecycle/policy settings retained | Extractor |
 | Secret `cg-metadata-db/database-url` | Batch injects the `url` JSON key; value is not Terraform-managed | Extractor |
 | Batch `cg-metadata-compute` | Fargate, max 32 vCPUs, six subnets, default VPC security group | Extractor |

@@ -337,6 +337,8 @@ resource "aws_ecr_repository" "application" {
   }
 }
 
+# Publicly accessible so the assistant Lambda (no VPC attachment) can connect; access
+# relies on the database password and the default parameter group's rds.force_ssl=1.
 resource "aws_db_instance" "metadata" {
   lifecycle {
     prevent_destroy = true
@@ -377,7 +379,7 @@ resource "aws_db_instance" "metadata" {
   performance_insights_kms_key_id       = "arn:aws:kms:us-east-1:001879457662:key/6d44d5a1-f862-4462-8c9e-b8e8c7a4ba69"
   performance_insights_retention_period = 0
   port                                  = 5432
-  publicly_accessible                   = false
+  publicly_accessible                   = true
   region                                = "us-east-1"
   skip_final_snapshot                   = true
   storage_encrypted                     = true
@@ -563,6 +565,16 @@ resource "aws_security_group" "database" {
     prefix_list_ids  = []
     protocol         = "tcp"
     security_groups  = ["sg-0b84f22c177e4ec4a"]
+    self             = false
+    to_port          = 5432
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = "Lambda (no VPC) - password + SSL only"
+    from_port        = 5432
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
     self             = false
     to_port          = 5432
   }]
