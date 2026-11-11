@@ -27,7 +27,8 @@ env:
 jobs:
   build:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
@@ -74,7 +75,7 @@ jobs:
         run: ./scripts/fetch_blender_build_assets.ps1 -BucketName $env:BLENDER_ARTIFACT_BUCKET
       - uses: aws-actions/amazon-ecr-login@v2
         if: steps.changes.outputs.build == 'true'
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
         if: steps.changes.outputs.build == 'true'
       - name: Build or reuse commit image
         if: steps.changes.outputs.build == 'true'
@@ -118,7 +119,8 @@ jobs:
           echo "uri=$ECR_URI@$digest" >> "$GITHUB_OUTPUT"
   plan:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
