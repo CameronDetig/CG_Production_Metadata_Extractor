@@ -1,7 +1,8 @@
 import json
 import unittest
 from pathlib import Path
-from release import object_key, plan_changes, terraform_plan_command, validate_run, validate_manifest
+from release import (newer_release_changes, object_key, plan_changes, terraform_plan_command,
+                     validate_manifest, validate_not_superseded, validate_run)
 
 
 class ReleaseSafetyTests(unittest.TestCase):
@@ -31,6 +32,21 @@ class ReleaseSafetyTests(unittest.TestCase):
                            ('conclusion', 'failure'), ('path', '.github/workflows/other.yml')]:
             with self.assertRaises(ValueError):
                 validate_run(dict(run, **{key: value}), config)
+
+    def test_superseded_plan_rejected(self):
+        compare = {'total_commits': 1, 'files': [{'filename': 'src/scanner.py'}]}
+        self.assertEqual(newer_release_changes(compare), ['src/scanner.py'])
+        with self.assertRaises(ValueError):
+            validate_not_superseded(compare)
+
+    def test_unrelated_or_no_newer_commits_allowed(self):
+        validate_not_superseded({'total_commits': 0, 'files': []})
+        validate_not_superseded({'total_commits': 2, 'files': [
+            {'filename': 'docs/ci-cd.md'}, {'filename': 'testing/test_dates.py'}]})
+
+    def test_truncated_compare_is_treated_as_superseded(self):
+        with self.assertRaises(ValueError):
+            validate_not_superseded({'total_commits': 5, 'files': [{'filename': 'x'}] * 300})
 
     def test_run_key_rejects_path_injection(self):
         with self.assertRaises(ValueError):
