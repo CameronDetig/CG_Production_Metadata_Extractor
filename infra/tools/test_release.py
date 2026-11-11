@@ -87,6 +87,16 @@ class ReleaseSafetyTests(unittest.TestCase):
             # Terraform reads an SSM parameter back through DescribeParameters after creating it.
             self.assertIn('ssm:DescribeParameters', actions)
 
+    def test_apply_role_can_register_job_definition_by_name(self):
+        # Registering a revision is authorized against the revision-less ARN.
+        bootstrap = Path(__file__).resolve().parents[1] / 'bootstrap' / 'main.tf.json'
+        policies = json.loads(bootstrap.read_text(encoding='utf-8'))['resource']['aws_iam_policy']
+        for statement in json.loads(policies['apply_16']['policy'])['Statement']:
+            if 'batch:RegisterJobDefinition' in statement['Action']:
+                self.assertIn('arn:aws:batch:us-east-1:001879457662:job-definition/cg-metadata-job', statement['Resource'])
+                return
+        self.fail('apply_16 has no RegisterJobDefinition statement')
+
 
 if __name__ == '__main__':
     unittest.main()
