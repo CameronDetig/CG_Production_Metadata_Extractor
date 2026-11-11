@@ -53,7 +53,7 @@ Repository `cg-metadata-extractor` (defined in `infra/resources.tf`):
 
 ## Branch protection
 
-No ruleset protects `main` yet. The intended one blocks deletion and force-push and requires the `validate` check, with no PR requirement and admin bypass, so the owner can still push directly. The PR trigger of `infra-checks.yml` is deliberately unfiltered by path: a required check from a path-filtered workflow never reports on unrelated PRs and would block them. Any new required check must run on every PR too.
+A repository ruleset, "main protection", is active on `main`. It blocks deletion and force-push and requires the `validate` check. It does **not** require pull requests, and repository admins can bypass it, so the owner can still push directly. Anyone without bypass cannot push straight to `main`, since the check cannot have run yet. The PR trigger of `infra-checks.yml` is deliberately unfiltered by path: a required check from a path-filtered workflow never reports on unrelated PRs and would block them. Any new required check must run on every PR too.
 
 ## Troubleshooting a failed release
 
