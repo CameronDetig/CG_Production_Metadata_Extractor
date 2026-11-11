@@ -84,6 +84,8 @@ class ReleaseSafetyTests(unittest.TestCase):
             self.assertIn('rds:ListTagsForResource', actions)
             self.assertIn('secretsmanager:ListTagsForResource', actions)
             self.assertIn('secretsmanager:ListSecretVersionIds', actions)
+            # Terraform reads an SSM parameter back through DescribeParameters after creating it.
+            self.assertIn('ssm:DescribeParameters', actions)
 
 
 if __name__ == '__main__':
