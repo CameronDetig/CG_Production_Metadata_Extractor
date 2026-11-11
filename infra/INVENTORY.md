@@ -11,7 +11,7 @@ Source: read-only AWS CLI calls using the operator's `AdminUser` profile, accoun
 | Batch `cg-metadata-compute` | Fargate, max 32 vCPUs, six subnets, default VPC security group | Extractor |
 | Queue `cg-metadata-queue` | Enabled, priority 1 | Extractor |
 | Job `cg-metadata-job:36` | 8 vCPUs, 53248 MiB RAM, public IP enabled, `OVERRIDE_EXISTING=false`, 4 scanner workers, `shows/` prefix | Extractor |
-| ECR | `cg-metadata-extractor`, `cg-chatbot`; current tag mutability/lifecycle retained | Respective component |
+| ECR | `cg-metadata-extractor` (immutable tags, scan on push, lifecycle retained), `cg-chatbot` (current settings retained) | Respective component |
 | Lambda `cg-production-chatbot` | x86_64 image, 3072 MB RAM, 180-second timeout, 512 MB temporary disk, **no VPC attachment** | Assistant |
 | Lambda image | `cg-chatbot:v11`, resolved digest `sha256:5a651f179f5d4aef647a9635bd2fb622a8afca615175cb4ea0e22425708dc71b` | Assistant |
 | Function URL | Existing public-auth (`NONE`) URL, `BUFFERED` invocation, existing CORS; authentication remains in application code | Assistant |
