@@ -337,57 +337,71 @@ resource "aws_ecr_repository" "application" {
   }
 }
 
-# Publicly accessible so the assistant Lambda (no VPC attachment) can connect; access
-# relies on the database password and the default parameter group's rds.force_ssl=1.
-resource "aws_db_instance" "metadata" {
+# Aurora Serverless v2, restored from the last cg-metadata-db RDS snapshot outside Terraform
+# and then imported. It pauses after five idle minutes (min_capacity = 0), so the first
+# connection after a quiet period waits roughly 15 seconds for the resume.
+resource "aws_rds_cluster" "metadata" {
   lifecycle {
     prevent_destroy = true
+    # Snapshot origin and the master password are not managed here. Minor engine upgrades
+    # are applied by AWS (auto_minor_version_upgrade on the instance).
+    ignore_changes = [snapshot_identifier, master_password, master_password_wo, engine_version]
   }
-  allocated_storage                     = 20
-  auto_minor_version_upgrade            = true
-  availability_zone                     = "us-east-1a"
-  backup_retention_period               = 1
-  backup_target                         = "region"
-  backup_window                         = "08:28-08:58"
-  ca_cert_identifier                    = "rds-ca-rsa2048-g1"
-  copy_tags_to_snapshot                 = true
-  customer_owned_ip_enabled             = false
-  database_insights_mode                = "standard"
-  db_subnet_group_name                  = "default-vpc-04bb7be45c9d6b7f7"
-  dedicated_log_volume                  = false
-  delete_automated_backups              = true
-  deletion_protection                   = false
-  engine                                = "postgres"
-  engine_lifecycle_support              = "open-source-rds-extended-support-disabled"
-  engine_version                        = "17.9"
-  iam_database_authentication_enabled   = false
-  identifier                            = "cg-metadata-db"
-  instance_class                        = "db.t4g.micro"
-  iops                                  = 3000
-  kms_key_id                            = "arn:aws:kms:us-east-1:001879457662:key/6d44d5a1-f862-4462-8c9e-b8e8c7a4ba69"
-  license_model                         = "postgresql-license"
-  maintenance_window                    = "wed:06:39-wed:07:09"
-  max_allocated_storage                 = 1000
-  monitoring_interval                   = 0
-  multi_az                              = false
-  network_type                          = "IPV4"
-  option_group_name                     = "default:postgres-17"
-  parameter_group_name                  = "default.postgres17"
-  password                              = null # sensitive
-  password_wo                           = null # sensitive
-  performance_insights_enabled          = false
-  performance_insights_kms_key_id       = "arn:aws:kms:us-east-1:001879457662:key/6d44d5a1-f862-4462-8c9e-b8e8c7a4ba69"
-  performance_insights_retention_period = 0
-  port                                  = 5432
-  publicly_accessible                   = true
-  region                                = "us-east-1"
-  skip_final_snapshot                   = true
-  storage_encrypted                     = true
-  storage_throughput                    = 125
-  storage_type                          = "gp3"
-  tags                                  = {}
-  username                              = "postgres"
-  vpc_security_group_ids                = ["sg-0b0227fe8f2b2e60f"]
+  backup_retention_period   = 1
+  cluster_identifier        = "cg-metadata-aurora"
+  copy_tags_to_snapshot     = true
+  db_subnet_group_name      = "default-vpc-04bb7be45c9d6b7f7"
+  deletion_protection       = true
+  engine                    = "aurora-postgresql"
+  engine_mode               = "provisioned"
+  engine_version            = "17.9"
+  final_snapshot_identifier = "cg-metadata-aurora-final"
+  kms_key_id                = "arn:aws:kms:us-east-1:001879457662:key/6d44d5a1-f862-4462-8c9e-b8e8c7a4ba69"
+  master_username           = "postgres"
+  network_type              = "IPV4"
+  port                      = 5432
+  region                    = "us-east-1"
+  skip_final_snapshot       = false
+  storage_encrypted         = true
+  tags                      = {}
+  vpc_security_group_ids    = ["sg-0b0227fe8f2b2e60f"]
+  serverlessv2_scaling_configuration {
+    max_capacity             = 4
+    min_capacity             = 0
+    seconds_until_auto_pause = 300
+  }
+}
+
+# Publicly accessible so the assistant Lambda (no VPC attachment) can connect; access
+# relies on the database password and the default parameter group's rds.force_ssl=1.
+resource "aws_rds_cluster_instance" "metadata" {
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes  = [engine_version]
+  }
+  auto_minor_version_upgrade = true
+  ca_cert_identifier         = "rds-ca-rsa2048-g1"
+  cluster_identifier         = aws_rds_cluster.metadata.id
+  copy_tags_to_snapshot      = false
+  db_subnet_group_name       = "default-vpc-04bb7be45c9d6b7f7"
+  engine                     = "aurora-postgresql"
+  engine_version             = "17.9"
+  identifier                 = "cg-metadata-aurora-1"
+  instance_class             = "db.serverless"
+  monitoring_interval        = 0
+  promotion_tier             = 1
+  publicly_accessible        = true
+  region                     = "us-east-1"
+  tags                       = {}
+}
+
+# The RDS instance this replaced leaves Terraform without being destroyed. Delete it by
+# hand, with a final snapshot, once the assistant and scanner are confirmed on Aurora.
+removed {
+  from = aws_db_instance.metadata
+  lifecycle {
+    destroy = false
+  }
 }
 
 resource "aws_security_group" "assistant" {
