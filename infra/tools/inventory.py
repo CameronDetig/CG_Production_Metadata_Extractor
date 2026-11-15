@@ -69,7 +69,8 @@ def main():
                           ('assistant', 'sg-0412872e9f94acb2b')]:
             add('aws_security_group', name, sid)
         add('aws_db_subnet_group', 'production', 'default-vpc-04bb7be45c9d6b7f7')
-        add('aws_db_instance', 'metadata', 'cg-metadata-db')
+        add('aws_rds_cluster', 'metadata', 'cg-metadata-aurora')
+        add('aws_rds_cluster_instance', 'metadata', 'cg-metadata-aurora-1')
         for name, bucket in [('assets', 'cg-production-data'), ('thumbnails', 'cg-production-data-thumbnails')]:
             add('aws_s3_bucket', name, bucket)
             for action, kind in [('get-bucket-versioning', 'aws_s3_bucket_versioning'),

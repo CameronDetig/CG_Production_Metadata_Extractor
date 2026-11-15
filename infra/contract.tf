@@ -15,8 +15,8 @@ resource "aws_ssm_parameter" "shared" {
     database_security_group_id  = aws_security_group.database.id
     assistant_security_group_id = aws_security_group.assistant.id
     batch_security_group_id     = aws_security_group.batch.id
-    database_host               = aws_db_instance.metadata.address
-    database_port               = aws_db_instance.metadata.port
+    database_host               = aws_rds_cluster.metadata.endpoint
+    database_port               = aws_rds_cluster.metadata.port
     asset_bucket                = aws_s3_bucket.assets.id
     thumbnail_bucket            = aws_s3_bucket.thumbnails.id
     database_secret_arn         = aws_secretsmanager_secret.database.arn

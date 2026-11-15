@@ -11,6 +11,12 @@ class ReleaseSafetyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 plan_changes({'resource_changes': [{'address': 'aws_db_instance.db', 'change': {'actions': actions}}]})
 
+    def test_forgetting_a_resource_is_reported_not_rejected(self):
+        # `removed { lifecycle { destroy = false } }` drops a resource from state without deleting it.
+        plan = {'resource_changes': [{'address': 'aws_db_instance.metadata', 'change': {
+            'actions': ['forget'], 'before': {'identifier': 'cg-metadata-db'}, 'after': None}}]}
+        self.assertEqual(plan_changes(plan), [{'address': 'aws_db_instance.metadata', 'actions': ['forget']}])
+
     def test_adoption_rejects_effective_change(self):
         plan = {'resource_changes': [{'address': 'aws_lambda_function.app', 'change': {
             'actions': ['update'], 'before': {'timeout': 180}, 'after': {'timeout': 120}}}]}
@@ -86,6 +92,18 @@ class ReleaseSafetyTests(unittest.TestCase):
             self.assertIn('secretsmanager:ListSecretVersionIds', actions)
             # Terraform reads an SSM parameter back through DescribeParameters after creating it.
             self.assertIn('ssm:DescribeParameters', actions)
+
+    def test_apply_role_can_modify_only_the_aurora_database(self):
+        bootstrap = Path(__file__).resolve().parents[1] / 'bootstrap' / 'main.tf.json'
+        policies = json.loads(bootstrap.read_text(encoding='utf-8'))['resource']['aws_iam_policy']
+        for statement in json.loads(policies['apply_8']['policy'])['Statement']:
+            if 'rds:ModifyDBCluster' in statement['Action']:
+                self.assertIn('rds:ModifyDBInstance', statement['Action'])
+                self.assertEqual(statement['Resource'], [
+                    'arn:aws:rds:us-east-1:001879457662:cluster:cg-metadata-aurora',
+                    'arn:aws:rds:us-east-1:001879457662:db:cg-metadata-aurora-1'])
+                return
+        self.fail('apply_8 has no ModifyDBCluster statement')
 
     def test_apply_role_can_register_job_definition_by_name(self):
         # Registering a revision is authorized against the revision-less ARN.

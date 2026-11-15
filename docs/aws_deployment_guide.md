@@ -85,6 +85,8 @@ Make sure you have docker installed and running: https://www.docker.com/
 
 ## Step 1: Set Up RDS PostgreSQL Database
 
+> **Production note:** the production database has since moved to Aurora Serverless v2 (`cg-metadata-aurora`, managed in `infra/`), which pauses when idle. The steps below still describe the simplest from-scratch setup with a plain RDS instance; the scanner only needs a PostgreSQL `DATABASE_URL` with pgvector available.
+
 ### Create RDS Instance
 
 1. Go to AWS RDS Console
@@ -502,10 +504,10 @@ aws logs tail /aws/batch/job --follow
 
 Batch runs on Fargate, so there's no idle compute cost between job runs — you only pay per job execution. As of this writing, the account-wide cost drivers (verified against the live account) were:
 
-- **RDS (`cg-metadata-db`, db.t4g.micro/gp3)**: the largest fixed cost. Already the cheapest viable burstable instance class; shared with the chatbot Lambda, so it can't be scaled down further without affecting that service too.
+- **Database (`cg-metadata-aurora`, Aurora Serverless v2)**: formerly the largest fixed cost as an always-on db.t4g.micro RDS instance that sat idle most of the month. Aurora scales to zero after five idle minutes, so compute is billed only while the chatbot or a scan is using it; storage is billed per GB actually used. The trade-off is a roughly 15-second wait on the first query after a pause.
 - **S3 (`cg-production-data`)**: scales with how much production data is stored. An Intelligent-Tiering lifecycle rule is applied so infrequently-accessed objects automatically move to a cheaper tier with no retrieval fees.
 - **ECR image storage**: container image versions accumulate on every push. A lifecycle policy (see `scripts/push_to_ecr.sh`) keeps only the 3 most recent tagged versions and expires untagged/orphaned images after 1 day.
-- **RDS public IPv4 address**: AWS charges ~$0.005/hr for any in-use public IPv4 address. The database no longer has `PubliclyAccessible` set, which removes this charge — see the note in Step 1 for how to still connect locally when needed.
+- **Database public IPv4 address**: AWS charges ~$0.005/hr (~$3.65/month) for any in-use public IPv4 address. The database is publicly accessible so the chatbot Lambda, which has no VPC attachment, can reach it. Removing the charge means moving the chatbot to the RDS Data API and making the database private.
 - **CloudWatch log retention**: `/aws/batch/job` previously had no expiration (logs kept forever). Retention is now set to 30 days.
 
 Further opportunities, not yet applied: right-sizing the job definition's vCPU/memory (it has grown to 8 vCPU / 52GB over many revisions — worth checking whether recent jobs actually need that much before the next bump), and using Fargate Spot for the compute environment if occasional job interruption/retry is acceptable.

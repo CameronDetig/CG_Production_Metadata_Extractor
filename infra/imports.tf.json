@@ -61,8 +61,12 @@
       "id": "default-vpc-04bb7be45c9d6b7f7"
     },
     {
-      "to": "aws_db_instance.metadata",
-      "id": "cg-metadata-db"
+      "to": "aws_rds_cluster.metadata",
+      "id": "cg-metadata-aurora"
+    },
+    {
+      "to": "aws_rds_cluster_instance.metadata",
+      "id": "cg-metadata-aurora-1"
     },
     {
       "to": "aws_s3_bucket.assets",
